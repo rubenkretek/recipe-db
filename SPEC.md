@@ -138,7 +138,10 @@ profiles (
 kitchens (
   id          uuid primary key,
   name        text not null,
-  created_by  uuid not null references profiles(id),
+  -- Provenance only. Nullable with `on delete set null` so that closing an
+  -- account does not take the shared kitchen with it, and does not fail
+  -- outright. See decision 10 in §9. Changed in Phase 1.
+  created_by  uuid references profiles(id) on delete set null,
   created_at  timestamptz not null default now()
 )
 
@@ -148,13 +151,20 @@ kitchen_members (
   joined_at   timestamptz not null default now(),
   primary key (kitchen_id, user_id)
 )
+-- create index on kitchen_members (user_id);
+-- The primary key already indexes kitchen_id as its leading column. This second
+-- index serves the other direction, "list my kitchens", which the PK cannot
+-- answer. Added in Phase 1.
 
 -- Shareable join codes. A member generates one, sends it however they like.
 kitchen_invites (
   id          uuid primary key,
   kitchen_id  uuid not null references kitchens(id) on delete cascade,
-  code        text not null unique,          -- short, human-typeable, e.g. 8 chars
-  created_by  uuid not null references profiles(id),
+  code        text not null,                 -- short, human-typeable, 8 chars
+  -- Uniqueness is a case-insensitive index, not a plain `unique`: codes are
+  -- generated uppercase but people type them in any case. Phase 1.
+  --   create unique index on kitchen_invites (upper(code));
+  created_by  uuid references profiles(id) on delete set null,   -- see kitchens
   expires_at  timestamptz not null,
   revoked_at  timestamptz,
   created_at  timestamptz not null default now()
@@ -431,13 +441,33 @@ Then, for every kitchen-scoped table:
 ```sql
 create policy "members full access" on <table>
   for all
+  to authenticated                              -- see note below
   using (public.is_kitchen_member(kitchen_id))
   with check (public.is_kitchen_member(kitchen_id));
 ```
 
+**Always include `to authenticated`.** Without a role clause a policy is also
+evaluated for the `anon` role on every request, which is wasted work and hides
+the intent. Added in Phase 1.
+
 Special cases:
 
-- `profiles`: readable by anyone sharing a kitchen with you; writable only by yourself.
+- `profiles`: readable by anyone sharing a kitchen with you; writable only by
+  yourself. The read half needs its own `security definer` helper, because the
+  obvious subquery recurses through `kitchen_members`:
+
+  ```sql
+  create function public.shares_a_kitchen_with(other uuid)
+  returns boolean language sql security definer stable set search_path = ''
+  as $$
+    select exists (
+      select 1
+      from public.kitchen_members mine
+      join public.kitchen_members theirs on theirs.kitchen_id = mine.kitchen_id
+      where mine.user_id = auth.uid() and theirs.user_id = other
+    );
+  $$;
+  ```
 - `kitchen_members`: readable by members; insert allowed via the invite-redemption RPC only.
 - `kitchen_invites`: readable by members. Redemption happens through a `security definer` RPC `redeem_invite(code text)` so a non-member can look up a code without being able to read the invites table.
 - Storage bucket `recipe-photos`: private, with a policy keyed on the kitchen id being the first path segment (`{kitchen_id}/{recipe_id}/{uuid}.jpg`). Serve via signed URLs.
@@ -687,8 +717,8 @@ Google OAuth as a second sign-in method, plus real SMTP so email confirmation an
 
 Confirm or override before Phase 1 starts.
 
-1. **"Kitchen"** as the name for a shared workspace. Alternatives: Household, Cookbook, Space.
-2. **Invite by shareable code**, valid 7 days, rather than by email address. Simpler and avoids email deliverability from a self-hosted box.
+1. ~~**"Kitchen"** as the name for a shared workspace.~~ **Confirmed before Phase 1.**
+2. ~~**Invite by shareable code**, valid 7 days.~~ **Confirmed before Phase 1.** Implemented as 8 characters of Crockford base32 (no I, L, O or U), matched case-insensitively, reusable until it expires or is revoked, with only the newest live code shown per kitchen.
 3. **`display_unit` is kept**, so a recipe entered as `2 tbsp` still reads as `2 tbsp` rather than `30ml`. Dropping the column is one line of migration and slightly less code, at the cost of tablespoon recipes reading in millilitres.
 4. **Method is a single markdown field**, not a structured list of steps. Structured steps would enable a step-by-step cook mode later, at the cost of a fiddlier editor now.
 5. **Photos: many per recipe**, first is the cover.
@@ -698,6 +728,20 @@ Confirm or override before Phase 1 starts.
 9. **Phase order.** Phase 10 could be pulled forward to right after Phase 5 if backfilling ingredients manually turns out to be the thing that stalls adoption.
 
 **Resolved in 0.2:** quantities are stored in base units with all conversion client-side; the shopping list is populated by an explicit button and checkbox picker.
+
+**Raised and resolved in Phase 1:**
+
+10. ~~**`created_by` blocks account deletion.**~~ **Resolved.** §5.2 originally gave
+    `kitchens.created_by` and `kitchen_invites.created_by` as `not null references
+    profiles(id)` with no delete rule, which defaults to `no action`. Because `profiles`
+    cascades from `auth.users`, any user who had ever created a kitchen or an invite
+    became permanently undeletable: the cascade reached the foreign key and the whole
+    delete failed. Both columns are now nullable with `on delete set null`. `created_by`
+    is provenance only — nothing reads it and no policy depends on it — and a kitchen
+    belongs to all its members equally (§2), so it should outlive whoever created it.
+    `cascade` was rejected because it would destroy a shared kitchen when one person
+    closed their account. Verified end to end: deleting the creator now succeeds and
+    leaves the kitchen intact with `created_by` null.
 
 ---
 

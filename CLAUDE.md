@@ -52,11 +52,11 @@ This is the rule that breaks everything if it slips.
 
 ### Database workflow
 
-- Schema changes are **numbered SQL migration files** in `supabase/migrations/`. Never change an applied migration, always add a new one.
-- Apply with `npx supabase db push`. There is no local Supabase instance: the linked project is the real one, holding real recipes.
-- **Never run a destructive command against the linked project.** No `supabase db reset`, no `drop table`, no `truncate`, no `delete` without a `where`. If a migration conflicts or has to be undone, write a new migration that reverses it and say what you are doing first.
-- After any schema change, regenerate types:
-  `npx supabase gen types typescript --linked > src/lib/database.types.ts`
+- Schema changes are **numbered SQL migration files** in `supabase/migrations/`, named `YYYYMMDDHHMMSS_name.sql`. Never change an applied migration, always add a new one.
+- **The CLI is not linked.** Migrations are applied through the Supabase MCP `apply_migration`, named identically to the file so the remote history and the files stay legible side by side. The file on disk is the durable record. If the CLI is ever linked (`supabase login` then `supabase link`), run `npx supabase migration list` to check for drift before any `db push`.
+- There is no local Supabase instance. The remote project is the only one.
+- **Never run a destructive command against the remote project.** No `supabase db reset`, no `drop table`, no `truncate`, no `delete` without a `where`. If a migration conflicts or has to be undone, write a new migration that reverses it and say what you are doing first.
+- After any schema change, regenerate types with the MCP `generate_typescript_types` and write the result to `src/lib/database.types.ts`. (`npx supabase gen types --linked` will not work while the CLI is unlinked.)
 - **`src/lib/database.types.ts` is generated. Never hand-edit it.**
 - Enable RLS on every new table in the same migration that creates it. A table without RLS is a bug.
 
@@ -116,7 +116,9 @@ We build in the phases set out in SPEC.md §8. Each phase ends with a working, d
 - **Counts round up on the shopping list** and to the nearest half in the recipe view. You cannot buy 1.5 onions.
 - **Auth is email and password only for now.** Google OAuth is deferred to Phase 12. Do not add OAuth providers, social buttons or provider-specific branching.
 - **The signup form must pass a display name** as `options.data.display_name`. Email signup supplies no metadata otherwise, and the profile trigger would fall back to the email local part.
-- **Email confirmation is disabled** in the Supabase dashboard, because the built-in sender is rate limited and there is no SMTP configured yet. Do not build a "check your inbox" screen or a password reset flow until Phase 12. Invites are shareable codes, not emails, so nothing else in the app needs to send mail.
+- **Email confirmation is disabled** in the Supabase dashboard, because the built-in sender is rate limited and there is no SMTP configured yet. Do not build a "check your inbox" screen or a password reset flow until Phase 12. Invites are shareable codes, not emails, so nothing else in the app needs to send mail. (Verified in Phase 1: signup returns a live session immediately.)
+- **`created_by` is nullable everywhere, with `on delete set null`.** It records who made a kitchen or an invite and nothing else: no query reads it and no policy depends on it. It is deliberately not `not null`, because `profiles` cascades from `auth.users` and a `no action` foreign key made anyone who had created a kitchen permanently undeletable. Do not "tidy this up" by restoring `not null`, and do not use `cascade` — that would destroy a shared kitchen when one member closed their account. Apply the same shape to any future `created_by`. See SPEC.md §9 decision 10.
+- **The last-member guard on leaving a kitchen is enforced in the server action, not the database.** A direct API call can still orphan a kitchen. It is a UX guard, not a security boundary.
 
 ---
 
