@@ -254,12 +254,20 @@ recipes (
 
 recipe_photos (
   id           uuid primary key,
-  kitchen_id   uuid not null,
+  kitchen_id   uuid not null references kitchens(id) on delete cascade,
   recipe_id    uuid not null references recipes(id) on delete cascade,
-  storage_path text not null,                -- Supabase Storage, private bucket
-  sort_order   int not null default 0,       -- sort_order 0 is the cover image
+  storage_path text not null unique,         -- Supabase Storage, private bucket
+  sort_order   int not null default 0,       -- lowest sort_order is the cover
   created_at   timestamptz not null default now()
 )
+-- create index on recipe_photos (recipe_id, sort_order);
+-- The cover is the lowest sort_order, tie-broken by id. Deletes leave gaps, so
+-- nothing may assume the values are contiguous or that the cover is exactly 0.
+-- The kitchen_id foreign key and the index were added in Phase 3.
+--
+-- Deleting a recipe cascades these rows but NOT the storage objects: Postgres
+-- cannot reach into Storage. Anything that hard-deletes a recipe must remove
+-- the files first.
 
 tags (
   id          uuid primary key,
@@ -633,6 +641,13 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 **Scope:** `recipe_photos`. Private Supabase Storage bucket with a kitchen-scoped path policy. Upload with client-side resize before upload (max 1600px, JPEG). Multiple photos per recipe, reorderable, first is the cover. Signed URLs with a sensible cache. Cover image on recipe cards, gallery on the detail page.
 
 **Acceptance:** upload from a phone camera roll works, the cover appears on the card, a signed URL cannot be guessed by a member of another kitchen.
+
+**Decided during Phase 3:**
+
+- **Signed URLs are memoised, not regenerated per render.** One hour expiry, batched with `createSignedUrls`, cached server-side for 50 minutes keyed on storage path. A signed URL carries a fresh token every time it is minted, so regenerating per render means a new URL, which means a guaranteed browser cache miss and a full re-download of every visible photo on every navigation. The 10 minute gap between cache TTL and expiry guarantees a URL handed out at the end of its cache window still has life left in it.
+- **Bytes go browser → Storage directly**, never through a server action. See CLAUDE.md.
+- **Reordering is buttons, not drag-and-drop** — move earlier / later plus an explicit "Make cover". Fewer dependencies and more reliable on a touch screen with two to five photos. Revisit if Phase 4 brings in a drag library for ingredients.
+- **Resizing uses `browser-image-compression`** specifically because it honours EXIF orientation; a hand-rolled canvas resize discards it and turns portrait phone photos on their side. A file it cannot decode (typically HEIC) is rejected with a message rather than uploaded broken.
 
 ---
 

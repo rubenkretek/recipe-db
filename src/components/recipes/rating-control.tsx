@@ -5,16 +5,12 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { formatScore } from "@/lib/ratings";
 import type { RecipeRating } from "@/lib/recipes";
 import { RATING_MAX, RATING_MIN, RATING_STEP } from "@/schemas/recipe";
 import { clearRating, rateRecipe } from "@/server/actions/recipes";
 
 const SAVE_DEBOUNCE_MS = 500;
-
-/** One decimal place, but no trailing ".0" on whole numbers. */
-export function formatScore(score: number): string {
-  return Number.isInteger(score) ? String(score) : score.toFixed(1);
-}
 
 /**
  * The signed-in member's own rating: a slider that saves itself.

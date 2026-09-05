@@ -1,7 +1,7 @@
 import { ImageIcon } from "lucide-react";
 import Link from "next/link";
 
-import { formatScore } from "@/components/recipes/rating-control";
+import { formatScore } from "@/lib/ratings";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { RecipeListItem } from "@/lib/recipes";
@@ -9,16 +9,26 @@ import type { RecipeListItem } from "@/lib/recipes";
 /**
  * A recipe in the grid.
  *
- * The image area is a deliberate placeholder rather than an omission: Phase 3
- * drops a real cover photo into exactly this box, and reserving the space now
- * means the grid does not reflow when it arrives.
+ * The image box keeps its dimensions whether or not there is a cover photo, so
+ * a library part-way through being photographed does not look ragged. A plain
+ * `<img>` rather than `next/image`: signed URLs rotate their token, which
+ * defeats the optimiser's cache, and the file is already resized to 1600px.
  */
 export function RecipeCard({ recipe }: { recipe: RecipeListItem }) {
   return (
     <Link href={`/recipes/${recipe.id}`} className="group">
       <Card className="h-full gap-0 overflow-hidden py-0 transition-colors group-hover:border-foreground/20">
-        <div className="bg-muted text-muted-foreground/40 flex aspect-video items-center justify-center">
-          <ImageIcon className="size-8" />
+        <div className="bg-muted text-muted-foreground/40 flex aspect-video items-center justify-center overflow-hidden">
+          {recipe.coverUrl ? (
+            <img
+              src={recipe.coverUrl}
+              alt=""
+              loading="lazy"
+              className="size-full object-cover"
+            />
+          ) : (
+            <ImageIcon className="size-8" />
+          )}
         </div>
 
         <CardContent className="flex flex-col gap-2 p-4">

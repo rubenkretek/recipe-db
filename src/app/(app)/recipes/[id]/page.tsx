@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { ArchiveButton } from "@/components/recipes/archive-button";
 import { Markdown } from "@/components/recipes/markdown";
+import { PhotoGallery } from "@/components/recipes/photo-gallery";
 import {
   RatingControl,
   RatingSummary,
@@ -85,6 +86,8 @@ export default async function RecipePage({
           </a>
         )}
       </div>
+
+      <PhotoGallery photos={recipe.photos} recipeName={recipe.name} />
 
       <Separator />
 

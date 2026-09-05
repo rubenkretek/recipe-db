@@ -1,10 +1,19 @@
 import { requireKitchenContext } from "@/lib/kitchen";
+import { signedUrlsFor } from "@/lib/photo-urls";
 import { createClient } from "@/lib/supabase/server";
 import type { MealType } from "@/schemas/recipe";
 
 export type RecipeTag = {
   id: string;
   name: string;
+};
+
+export type RecipePhoto = {
+  id: string;
+  storagePath: string;
+  sortOrder: number;
+  /** Signed and short-lived. Absent if the object could not be signed. */
+  url: string | null;
 };
 
 export type RecipeRating = {
@@ -23,6 +32,8 @@ export type RecipeListItem = {
   ratings: RecipeRating[];
   /** Mean of the scores actually given, or null when nobody has rated. */
   averageRating: number | null;
+  /** Signed URL of the cover, or null when the recipe has no photos. */
+  coverUrl: string | null;
 };
 
 export type RecipeDetail = RecipeListItem & {
@@ -30,6 +41,8 @@ export type RecipeDetail = RecipeListItem & {
   method: string | null;
   notes: string | null;
   baseServings: number;
+  /** Every photo, cover first. */
+  photos: RecipePhoto[];
 };
 
 export type RecipeSort = "name" | "rating" | "recent";
@@ -55,7 +68,8 @@ const RECIPE_SELECT = `
   id, name, meal_type, archived_at, created_at,
   source_url, method, notes, base_servings,
   recipe_tags ( tags ( id, name ) ),
-  ratings ( user_id, score, profiles ( display_name ) )
+  ratings ( user_id, score, profiles ( display_name ) ),
+  recipe_photos ( id, storage_path, sort_order )
 `;
 
 type RecipeRow = {
@@ -74,6 +88,11 @@ type RecipeRow = {
     score: number;
     profiles: { display_name: string } | null;
   }[];
+  recipe_photos: {
+    id: string;
+    storage_path: string;
+    sort_order: number;
+  }[];
 };
 
 /**
@@ -88,13 +107,36 @@ function averageOf(scores: number[]): number | null {
   return scores.reduce((total, score) => total + score, 0) / scores.length;
 }
 
-function toRecipeDetail(row: RecipeRow): RecipeDetail {
+/**
+ * Photos of a recipe, cover first.
+ *
+ * Sorted by `sort_order` and tie-broken by id, because deletes leave gaps and
+ * nothing guarantees the values stay contiguous. The first entry is the cover.
+ * SPEC.md §5.4.
+ */
+function photosOf(row: RecipeRow, urls: Map<string, string>): RecipePhoto[] {
+  return [...row.recipe_photos]
+    .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+    .map((photo) => ({
+      id: photo.id,
+      storagePath: photo.storage_path,
+      sortOrder: photo.sort_order,
+      url: urls.get(photo.storage_path) ?? null,
+    }));
+}
+
+function toRecipeDetail(
+  row: RecipeRow,
+  urls: Map<string, string>,
+): RecipeDetail {
   const ratings = row.ratings.map((rating) => ({
     userId: rating.user_id,
     displayName: rating.profiles?.display_name ?? "Someone",
     // numeric(3,1) arrives as a number through PostgREST, but be explicit.
     score: Number(rating.score),
   }));
+
+  const photos = photosOf(row, urls);
 
   return {
     id: row.id,
@@ -112,7 +154,23 @@ function toRecipeDetail(row: RecipeRow): RecipeDetail {
       .sort((a, b) => a.name.localeCompare(b.name)),
     ratings,
     averageRating: averageOf(ratings.map((rating) => rating.score)),
+    photos,
+    coverUrl: photos[0]?.url ?? null,
   };
+}
+
+/**
+ * Signs every photo across a set of recipes in one batch.
+ *
+ * One round trip for the whole grid rather than one per recipe, which is the
+ * difference between a fast page and an obvious stall once there are more than a
+ * handful of recipes.
+ */
+async function signPhotosOf(rows: RecipeRow[]): Promise<Map<string, string>> {
+  const paths = rows.flatMap((row) =>
+    row.recipe_photos.map((photo) => photo.storage_path),
+  );
+  return signedUrlsFor(paths);
 }
 
 /**
@@ -166,7 +224,9 @@ export async function listRecipes(
     throw new Error(`Could not load recipes: ${error.message}`);
   }
 
-  let recipes = ((data ?? []) as unknown as RecipeRow[]).map(toRecipeDetail);
+  const rows = (data ?? []) as unknown as RecipeRow[];
+  const urls = await signPhotosOf(rows);
+  let recipes = rows.map((row) => toRecipeDetail(row, urls));
 
   if (filters.tagId) {
     recipes = recipes.filter((recipe) =>
@@ -234,7 +294,8 @@ export async function getRecipe(recipeId: string): Promise<RecipeDetail | null> 
     return null;
   }
 
-  return toRecipeDetail(data as unknown as RecipeRow);
+  const row = data as unknown as RecipeRow;
+  return toRecipeDetail(row, await signPhotosOf([row]));
 }
 
 /**
