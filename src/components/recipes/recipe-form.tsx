@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 
+import type { IngredientOption } from "@/components/recipes/ingredient-combobox";
+import { IngredientEditor } from "@/components/recipes/ingredient-editor";
 import { MethodEditor } from "@/components/recipes/method-editor";
 import { TagCombobox } from "@/components/recipes/tag-combobox";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { RecipeDetail, RecipeTag } from "@/lib/recipes";
+import { UNITS } from "@/lib/units";
 import {
   MEAL_TYPES,
   recipeFormSchema,
@@ -26,6 +29,30 @@ import {
   type RecipeFormValues,
 } from "@/schemas/recipe";
 import { createRecipe, updateRecipe } from "@/server/actions/recipes";
+
+/**
+ * Converts a stored base quantity back into the unit it was entered in, so the
+ * editor reopens showing "1 kg" rather than "1000 g".
+ *
+ * Falls back to the base value when there is no display unit, or when the
+ * conversion would not be clean — the same rule `formatQuantity` applies.
+ */
+function displayableQuantity(ingredient: {
+  quantity: number | null;
+  unit: string | null;
+  displayUnit: string | null;
+}): number | null {
+  if (ingredient.quantity === null) return null;
+
+  const display = ingredient.displayUnit
+    ? UNITS[ingredient.displayUnit]
+    : undefined;
+  if (!display || display.base !== ingredient.unit) {
+    return ingredient.quantity;
+  }
+
+  return Math.round((ingredient.quantity / display.toBase) * 100) / 100;
+}
 
 const MEAL_TYPE_LABELS: Record<(typeof MEAL_TYPES)[number], string> = {
   breakfast: "Breakfast",
@@ -44,9 +71,11 @@ const MEAL_TYPE_LABELS: Record<(typeof MEAL_TYPES)[number], string> = {
  */
 export function RecipeForm({
   allTags,
+  allIngredients,
   recipe,
 }: {
   allTags: RecipeTag[];
+  allIngredients: IngredientOption[];
   recipe?: RecipeDetail;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
@@ -56,6 +85,7 @@ export function RecipeForm({
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors },
   } = useForm<RecipeFormInput, unknown, RecipeFormValues>({
     resolver: zodResolver(recipeFormSchema),
@@ -67,6 +97,15 @@ export function RecipeForm({
       method: recipe?.method ?? "",
       notes: recipe?.notes ?? "",
       tagIds: recipe?.tags.map((tag) => tag.id) ?? [],
+      // Quantities come back in base units and go straight back out that way
+      // unless edited, so the editor shows the unit they were entered in.
+      ingredients:
+        recipe?.ingredients.map((ingredient) => ({
+          ingredientId: ingredient.ingredientId,
+          quantity: displayableQuantity(ingredient),
+          unit: ingredient.displayUnit ?? ingredient.unit,
+          note: ingredient.note,
+        })) ?? [],
     },
   });
 
@@ -158,6 +197,16 @@ export function RecipeForm({
         <p className="text-muted-foreground text-xs">
           Where it came from. Optional.
         </p>
+      </div>
+
+      <div className="grid gap-2">
+        <Label>Ingredients</Label>
+        <IngredientEditor
+          control={control}
+          register={register}
+          setValue={setValue}
+          allIngredients={allIngredients}
+        />
       </div>
 
       <div className="grid gap-2">

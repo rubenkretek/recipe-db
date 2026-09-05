@@ -14,6 +14,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      ingredient_aliases: {
+        Row: {
+          alias: string
+          created_at: string
+          id: string
+          ingredient_id: string
+          kitchen_id: string
+        }
+        Insert: {
+          alias: string
+          created_at?: string
+          id?: string
+          ingredient_id: string
+          kitchen_id: string
+        }
+        Update: {
+          alias?: string
+          created_at?: string
+          id?: string
+          ingredient_id?: string
+          kitchen_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredient_aliases_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingredient_aliases_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingredients: {
+        Row: {
+          category: string | null
+          created_at: string
+          default_unit: string | null
+          id: string
+          kitchen_id: string
+          name: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          default_unit?: string | null
+          id?: string
+          kitchen_id: string
+          name: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          default_unit?: string | null
+          id?: string
+          kitchen_id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredients_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kitchen_invites: {
         Row: {
           code: string
@@ -187,6 +261,64 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_ingredients: {
+        Row: {
+          display_unit: string | null
+          id: string
+          ingredient_id: string
+          kitchen_id: string
+          note: string | null
+          quantity: number | null
+          recipe_id: string
+          sort_order: number
+          unit: string | null
+        }
+        Insert: {
+          display_unit?: string | null
+          id?: string
+          ingredient_id: string
+          kitchen_id: string
+          note?: string | null
+          quantity?: number | null
+          recipe_id: string
+          sort_order?: number
+          unit?: string | null
+        }
+        Update: {
+          display_unit?: string | null
+          id?: string
+          ingredient_id?: string
+          kitchen_id?: string
+          note?: string | null
+          quantity?: number | null
+          recipe_id?: string
+          sort_order?: number
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_ingredients_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_ingredients_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_ingredients_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
             referencedColumns: ["id"]
           },
         ]
@@ -373,6 +505,10 @@ export type Database = {
       create_invite: { Args: { target_kitchen_id: string }; Returns: string }
       create_kitchen: { Args: { kitchen_name: string }; Returns: string }
       is_kitchen_member: { Args: { k: string }; Returns: boolean }
+      merge_ingredients: {
+        Args: { source_id: string; target_id: string }
+        Returns: undefined
+      }
       redeem_invite: { Args: { invite_code: string }; Returns: string }
       shares_a_kitchen_with: { Args: { other: string }; Returns: boolean }
     }

@@ -1,8 +1,18 @@
 import { RecipeForm } from "@/components/recipes/recipe-form";
+import { listIngredients } from "@/lib/ingredients";
 import { listTags } from "@/lib/recipes";
 
 export default async function NewRecipePage() {
-  const allTags = await listTags();
+  const [allTags, ingredients] = await Promise.all([
+    listTags(),
+    listIngredients(),
+  ]);
+
+  const allIngredients = ingredients.map((ingredient) => ({
+    id: ingredient.id,
+    name: ingredient.name,
+    defaultUnit: ingredient.defaultUnit,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -16,7 +26,7 @@ export default async function NewRecipePage() {
         Photos can be added once the recipe is saved.
       </p>
 
-      <RecipeForm allTags={allTags} />
+      <RecipeForm allTags={allTags} allIngredients={allIngredients} />
     </div>
   );
 }

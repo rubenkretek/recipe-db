@@ -102,7 +102,7 @@ We build in the phases set out in SPEC.md §8. Each phase ends with a working, d
 ### Definition of done for a phase
 
 1. Every acceptance criterion in the spec for that phase is met.
-2. `npm run build` passes with no type errors.
+2. `npm run build` passes with no type errors, and `npm test` passes.
 3. RLS is enabled on every new table, and a manual check confirms another kitchen's data returns zero rows.
 4. Types have been regenerated.
 5. Any new environment variable is in `.env.example`.
@@ -130,6 +130,8 @@ We build in the phases set out in SPEC.md §8. Each phase ends with a working, d
 - **`src/lib/photos.ts` is client-safe; `src/lib/photo-urls.ts` is server-only.** The split exists because importing the signing helper from a Client Component drags `next/headers` into the browser bundle and fails the build. Constants and the path helper live in the former, `signedUrlsFor()` in the latter.
 - **Never call `cookies()` inside `unstable_cache()`.** Creating a Supabase client reads cookies, so the client must be built *outside* the cached function and closed over — `signedUrlsFor()` in `src/lib/photo-urls.ts` shows the shape. Getting this wrong throws at **render** time, not build time, and only on a page that actually has data to cache, so it passes every build and then fails in front of the user.
 - **A Server Component may render a component from a `"use client"` module, but must never call a plain function exported from one.** It fails at render time with "Attempted to call X from the server but X is on the client" — invisible to `npm run build` and to `tsc`. Pure helpers shared across the boundary belong in `src/lib/` (see `src/lib/ratings.ts`), never beside the client component that happens to use them.
+- **A scaled quantity can change units mid-scale.** `display_unit` is honoured only when the value converts back cleanly, so `2 tbsp` scaled by 1.33 becomes 40ml — 2.67 tbsp, not clean — and renders as `40ml`. The unit appearing to change as the servings stepper moves is correct behaviour, not a bug. See SPEC.md §6.1.
+- **`formatQuantity` omits the unit for `piece` entirely**, returning just the number, because "2 piece onion" has to read "2 onions". The caller appends the name and pluralises it with `pluraliseName()`. Any new surface that renders an ingredient line needs both halves, or `piece` quantities will read as a bare number.
 - **The build does not prove the app renders.** `npm run build`, `tsc` and `eslint` all pass on code that throws the moment a Server Component actually runs — both bugs above shipped through green builds. Anything touching Server Component data loading needs the page fetched with a real session before it counts as verified.
 - **Storage objects do not cascade.** `recipe_photos` cascades from `recipes`, but Postgres cannot reach into Storage, so hard-deleting a recipe or a kitchen would strand its files. Latent today because archiving is the only removal — but anything that introduces a hard delete must remove the objects first.
 - **`next/image` is off for recipe photos**, disabled for `src/components/recipes/**` in `eslint.config.mjs` with the reasoning. Signed URLs rotate their token, so the optimiser would re-fetch and re-encode the same photo on every new signature; the files are already resized to 1600px JPEG client-side.

@@ -16,6 +16,18 @@ export type RecipePhoto = {
   url: string | null;
 };
 
+export type RecipeIngredient = {
+  id: string;
+  ingredientId: string;
+  name: string;
+  /** BASE UNITS: grams, millilitres or a count. Never kg or tbsp. */
+  quantity: number | null;
+  unit: string | null;
+  /** How it was entered, so a tablespoon recipe still reads in tablespoons. */
+  displayUnit: string | null;
+  note: string | null;
+};
+
 export type RecipeRating = {
   userId: string;
   displayName: string;
@@ -43,6 +55,8 @@ export type RecipeDetail = RecipeListItem & {
   baseServings: number;
   /** Every photo, cover first. */
   photos: RecipePhoto[];
+  /** The ingredient list, in the order the author arranged it. */
+  ingredients: RecipeIngredient[];
 };
 
 export type RecipeSort = "name" | "rating" | "recent";
@@ -69,7 +83,11 @@ const RECIPE_SELECT = `
   source_url, method, notes, base_servings,
   recipe_tags ( tags ( id, name ) ),
   ratings ( user_id, score, profiles ( display_name ) ),
-  recipe_photos ( id, storage_path, sort_order )
+  recipe_photos ( id, storage_path, sort_order ),
+  recipe_ingredients (
+    id, ingredient_id, quantity, unit, display_unit, note, sort_order,
+    ingredients ( name )
+  )
 `;
 
 type RecipeRow = {
@@ -92,6 +110,16 @@ type RecipeRow = {
     id: string;
     storage_path: string;
     sort_order: number;
+  }[];
+  recipe_ingredients: {
+    id: string;
+    ingredient_id: string;
+    quantity: number | null;
+    unit: string | null;
+    display_unit: string | null;
+    note: string | null;
+    sort_order: number;
+    ingredients: { name: string } | null;
   }[];
 };
 
@@ -138,6 +166,20 @@ function toRecipeDetail(
 
   const photos = photosOf(row, urls);
 
+  // sort_order is the author's arrangement; id is only a tie-break so the order
+  // is stable if two rows ever share one.
+  const ingredients = [...row.recipe_ingredients]
+    .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+    .map((row) => ({
+      id: row.id,
+      ingredientId: row.ingredient_id,
+      name: row.ingredients?.name ?? "Unknown ingredient",
+      quantity: row.quantity === null ? null : Number(row.quantity),
+      unit: row.unit,
+      displayUnit: row.display_unit,
+      note: row.note,
+    }));
+
   return {
     id: row.id,
     name: row.name,
@@ -156,6 +198,7 @@ function toRecipeDetail(
     averageRating: averageOf(ratings.map((rating) => rating.score)),
     photos,
     coverUrl: photos[0]?.url ?? null,
+    ingredients,
   };
 }
 

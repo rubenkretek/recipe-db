@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { requireUserId } from "@/lib/auth";
 import { requireKitchenContext } from "@/lib/kitchen";
+import { toBase } from "@/lib/units";
 import { createClient } from "@/lib/supabase/server";
 import {
   createRecipeSchema,
@@ -13,6 +14,7 @@ import {
   recipeIdSchema,
   updateRecipeSchema,
 } from "@/schemas/recipe";
+import type { RecipeIngredientValues } from "@/schemas/ingredient";
 import type { ActionError } from "@/server/actions/auth";
 
 /** Postgres unique-violation SQLSTATE, used for the tag dedupe race below. */
@@ -58,6 +60,69 @@ async function replaceRecipeTags(
   return insertError?.message ?? null;
 }
 
+/**
+ * Replaces a recipe's ingredient rows with exactly the list given.
+ *
+ * Delete-then-insert for the same reason as tags: a diff is more code to get
+ * wrong for no measurable saving on a list of this size, and it keeps
+ * `sort_order` trivially correct — the array index *is* the order.
+ *
+ * This is where entered units become base units. Everything below this line is
+ * grams, millilitres or a count; `display_unit` remembers what was typed so a
+ * tablespoon recipe still reads in tablespoons. SPEC.md §5.3.
+ */
+async function replaceRecipeIngredients(
+  recipeId: string,
+  kitchenId: string,
+  ingredients: RecipeIngredientValues[],
+): Promise<string | null> {
+  const supabase = await createClient();
+
+  const { error: clearError } = await supabase
+    .from("recipe_ingredients")
+    .delete()
+    .eq("recipe_id", recipeId)
+    .eq("kitchen_id", kitchenId);
+
+  if (clearError) {
+    return clearError.message;
+  }
+
+  if (ingredients.length === 0) {
+    return null;
+  }
+
+  let rows;
+  try {
+    rows = ingredients.map((ingredient, index) => {
+      const { quantity, unit } = toBase(ingredient.quantity, ingredient.unit);
+
+      return {
+        kitchen_id: kitchenId,
+        recipe_id: recipeId,
+        ingredient_id: ingredient.ingredientId,
+        quantity,
+        unit,
+        // Only meaningful alongside a quantity: "to taste" has no unit to
+        // remember. Keeping it null here matches the check constraint.
+        display_unit: quantity === null ? null : ingredient.unit,
+        note: ingredient.note,
+        sort_order: index,
+      };
+    });
+  } catch (error) {
+    // toBase throws rather than guessing at an unknown unit. The zod schema
+    // should have caught it first, so this is the belt to that pair of braces.
+    return error instanceof Error ? error.message : "Unknown unit.";
+  }
+
+  const { error: insertError } = await supabase
+    .from("recipe_ingredients")
+    .insert(rows);
+
+  return insertError?.message ?? null;
+}
+
 /** Creates a recipe and goes straight to it. Only the name is required. */
 export async function createRecipe(
   input: unknown,
@@ -97,6 +162,15 @@ export async function createRecipe(
   );
   if (tagError) {
     return { error: tagError };
+  }
+
+  const ingredientError = await replaceRecipeIngredients(
+    data.id,
+    active.id,
+    parsed.data.ingredients,
+  );
+  if (ingredientError) {
+    return { error: ingredientError };
   }
 
   revalidatePath("/recipes");
@@ -139,6 +213,15 @@ export async function updateRecipe(
   );
   if (tagError) {
     return { error: tagError };
+  }
+
+  const ingredientError = await replaceRecipeIngredients(
+    parsed.data.recipeId,
+    active.id,
+    parsed.data.ingredients,
+  );
+  if (ingredientError) {
+    return { error: ingredientError };
   }
 
   revalidatePath("/recipes");

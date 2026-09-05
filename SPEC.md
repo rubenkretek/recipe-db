@@ -348,15 +348,27 @@ ingredient_supermarkets (
 
 recipe_ingredients (
   id            uuid primary key,
-  kitchen_id    uuid not null,
+  kitchen_id    uuid not null references kitchens(id) on delete cascade,
   recipe_id     uuid not null references recipes(id) on delete cascade,
   ingredient_id uuid not null references ingredients(id) on delete restrict,
   quantity      numeric,                 -- BASE UNITS. null means "to taste" / unquantified.
   unit          text,                    -- 'g' | 'ml' | count unit. null when quantity is null.
   display_unit  text,                    -- optional hint, see 5.3
   note          text,                    -- 'finely chopped', 'plus extra to serve'
-  sort_order    int not null default 0
+  sort_order    int not null default 0,
+  -- "null when quantity is null" made enforceable. Phase 4.
+  check ((quantity is null and unit is null)
+      or (quantity is not null and unit is not null))
 )
+-- create index on recipe_ingredients (recipe_id, sort_order);
+-- create index on recipe_ingredients (ingredient_id);
+-- The second answers "which recipes use this ingredient", which renaming,
+-- merging and the manager's usage count all need and no primary key serves.
+-- The kitchen_id foreign key and both indexes were added in Phase 4.
+--
+-- `on delete restrict` on ingredient_id means an ingredient in use cannot be
+-- deleted at all. That is deliberate: there is no delete in the ingredient
+-- manager, and merging is how a duplicate goes away.
 ```
 
 ### 5.6 Meal plans
@@ -512,6 +524,11 @@ Exports:
 - `toBase(quantity, inputUnit)` — returns `{ quantity, unit }` in base units. Used on save.
 - `formatQuantity(quantity, unit, displayUnit?)` — returns a display string per the rule in §5.3.
 - `canMerge(unitA, unitB)` — string equality. Exists as a named function so the intent is documented at every call site.
+- `pluraliseName(name, count)` — added in Phase 4. §5.3 wants `2 piece onion` to read `2 onions`, which means pluralising the **ingredient name**, and `formatQuantity` is never given the name. Best effort: it handles the common English rules and gets irregulars wrong ("leafs"), so the fix for those is to name the ingredient in plural form.
+
+**"Converts back cleanly", defined.** `display_unit` is honoured when the stored value divided by that unit's multiplier lands within 0.001 of a number with at most 2 decimal places. So 30ml entered as tbsp renders `2 tbsp`, while 100g entered as oz would be 3.5274oz and falls back to `100g`. Decided in Phase 4, because acceptance criterion 2 turns on it.
+
+**Consequence worth knowing:** scaling can break a clean conversion, so the same ingredient may change units as the servings stepper moves — `2 tbsp` scaled by 1.33 is 40ml, which is 2.67 tbsp, so it renders as `40ml`. Correct, but surprising.
 
 There is deliberately no conversion between dimensions and no fuzzy matching. If a user enters something the parser does not understand, the editor asks them to pick a unit rather than guessing.
 

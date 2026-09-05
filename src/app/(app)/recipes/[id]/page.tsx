@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ArchiveButton } from "@/components/recipes/archive-button";
+import { IngredientList } from "@/components/recipes/ingredient-list";
 import { Markdown } from "@/components/recipes/markdown";
 import { PhotoGallery } from "@/components/recipes/photo-gallery";
 import {
@@ -102,6 +103,16 @@ export default async function RecipePage({
           initialScore={myRating?.score ?? null}
         />
       </section>
+
+      {recipe.ingredients.length > 0 && (
+        <>
+          <Separator />
+          <IngredientList
+            ingredients={recipe.ingredients}
+            baseServings={recipe.baseServings}
+          />
+        </>
+      )}
 
       {recipe.method && (
         <>

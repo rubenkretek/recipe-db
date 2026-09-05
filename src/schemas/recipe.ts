@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { recipeIngredientSchema } from "@/schemas/ingredient";
+
 /**
  * The meal types from SPEC.md §5.1, mirroring the `meal_type` Postgres enum.
  *
@@ -56,6 +58,13 @@ export const recipeFormSchema = z.object({
   notes: optionalText,
   /** Tag ids already attached. Tag creation happens before submit. */
   tagIds: z.array(z.uuid()).default([]),
+  /**
+   * The ingredient list, in display order. Unlike photos — which are files and
+   * upload immediately — ingredients are plain data and save with the form.
+   * Quantities arrive in whatever unit was picked and are converted to base
+   * units server-side. SPEC.md §5.3.
+   */
+  ingredients: z.array(recipeIngredientSchema).default([]),
 });
 
 export type RecipeFormInput = z.input<typeof recipeFormSchema>;

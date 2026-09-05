@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PhotoManager } from "@/components/recipes/photo-manager";
 import { RecipeForm } from "@/components/recipes/recipe-form";
 import { requireKitchenContext } from "@/lib/kitchen";
+import { listIngredients } from "@/lib/ingredients";
 import { getRecipe, listTags } from "@/lib/recipes";
 
 export default async function EditRecipePage({
@@ -11,11 +12,18 @@ export default async function EditRecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [recipe, allTags, { active }] = await Promise.all([
+  const [recipe, allTags, ingredients, { active }] = await Promise.all([
     getRecipe(id),
     listTags(),
+    listIngredients(),
     requireKitchenContext(),
   ]);
+
+  const allIngredients = ingredients.map((ingredient) => ({
+    id: ingredient.id,
+    name: ingredient.name,
+    defaultUnit: ingredient.defaultUnit,
+  }));
 
   if (!recipe) {
     notFound();
@@ -36,7 +44,11 @@ export default async function EditRecipePage({
         photos={recipe.photos}
       />
 
-      <RecipeForm allTags={allTags} recipe={recipe} />
+      <RecipeForm
+        allTags={allTags}
+        allIngredients={allIngredients}
+        recipe={recipe}
+      />
     </div>
   );
 }

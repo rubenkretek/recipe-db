@@ -1,6 +1,9 @@
+import Link from "next/link";
+
 import { InvitePanel } from "@/components/settings/invite-panel";
 import { LeaveKitchenButton } from "@/components/settings/leave-kitchen-button";
 import { RenameKitchenForm } from "@/components/settings/rename-kitchen-form";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -90,6 +93,20 @@ export default async function KitchenSettingsPage() {
             code={liveInvite?.code ?? null}
             expiresAt={liveInvite?.expires_at ?? null}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Ingredients</CardTitle>
+          <CardDescription>
+            Rename an ingredient everywhere, or merge duplicates together.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="secondary" asChild>
+            <Link href="/settings/ingredients">Manage ingredients</Link>
+          </Button>
         </CardContent>
       </Card>
 
