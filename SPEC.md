@@ -243,10 +243,14 @@ recipes (
   base_servings     int not null default 2 check (base_servings > 0),
   last_reviewed_at  timestamptz,             -- replaces the "2026 reviewed" column
   archived_at       timestamptz,             -- soft delete
-  created_by        uuid not null references profiles(id),
+  -- Provenance only, same shape as kitchens.created_by. See decision 10 in §9.
+  -- Changed in Phase 2.
+  created_by        uuid references profiles(id) on delete set null,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 )
+-- updated_at is maintained by the shared set_updated_at() trigger, created in
+-- Phase 1 and attached to recipes and ratings in Phase 2.
 
 recipe_photos (
   id           uuid primary key,
@@ -271,6 +275,10 @@ recipe_tags (
   kitchen_id  uuid not null,
   primary key (recipe_id, tag_id)
 )
+-- create index on recipe_tags (tag_id);
+-- The primary key leads with recipe_id, so it answers "tags of this recipe" but
+-- not "recipes with this tag", which is what filtering the grid by tag needs.
+-- Added in Phase 2.
 
 ratings (
   id          uuid primary key,
@@ -284,6 +292,14 @@ ratings (
 ```
 
 Ratings are per person and visible to everyone in the kitchen. Recipe lists sort by the **average** of all ratings, with the individual scores shown on the recipe card.
+
+The average counts only the members who have actually rated. A missing row means
+"not rated" and is not treated as a zero, so an unrated recipe is not pushed to
+the bottom of a rating sort as though it were bad. Clearing a rating deletes the
+row rather than storing 0. Decided in Phase 2.
+
+`ratings` uses the same uniform policy as every other kitchen-scoped table, which
+means any member can edit any member's score. See decision 11 in §9.
 
 ### 5.5 Ingredients and supermarkets
 
@@ -728,6 +744,17 @@ Confirm or override before Phase 1 starts.
 9. **Phase order.** Phase 10 could be pulled forward to right after Phase 5 if backfilling ingredients manually turns out to be the thing that stalls adoption.
 
 **Resolved in 0.2:** quantities are stored in base units with all conversion client-side; the shopping list is populated by an explicit button and checkbox picker.
+
+**Raised and resolved in Phase 2:**
+
+11. **Any kitchen member can edit any member's rating.** `ratings` uses the uniform
+    "members full access" policy from §5.8 rather than splitting read from write. The
+    alternative — read for all members, write only where `user_id = auth.uid()` — was
+    proposed and **deliberately rejected** in favour of keeping one policy shape across
+    every table. With two people who trust each other the realistic risk is a mis-tap,
+    not malice, and the UI attributes every score by name so an accidental edit is
+    visible. This is a decision, not an oversight: do not "fix" it without asking.
+    Worth revisiting if a kitchen ever has more than two members.
 
 **Raised and resolved in Phase 1:**
 

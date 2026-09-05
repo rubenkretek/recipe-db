@@ -1,17 +1,18 @@
 import { BookOpen, CalendarDays, ShoppingCart } from "lucide-react";
+import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireKitchenContext } from "@/lib/kitchen";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * The three things the app will do, in the order the core loop uses them.
- * Each becomes a real link in the phase that builds it. SPEC.md §8.
+ * The three things the app does, in the order the core loop uses them.
+ * Each gains a href in the phase that builds it. SPEC.md §8.
  */
-const UPCOMING = [
-  { icon: BookOpen, title: "Recipes", phase: "Phase 2" },
-  { icon: CalendarDays, title: "Meal plan", phase: "Phase 6" },
-  { icon: ShoppingCart, title: "Shopping list", phase: "Phase 7" },
+const SECTIONS = [
+  { icon: BookOpen, title: "Recipes", href: "/recipes", phase: null },
+  { icon: CalendarDays, title: "Meal plan", href: null, phase: "Phase 6" },
+  { icon: ShoppingCart, title: "Shopping list", href: null, phase: "Phase 7" },
 ];
 
 export default async function DashboardPage() {
@@ -42,17 +43,35 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        {UPCOMING.map(({ icon: Icon, title, phase }) => (
-          <Card key={title} className="border-dashed shadow-none">
-            <CardHeader>
-              <Icon className="text-muted-foreground size-5" />
-              <CardTitle className="text-base">{title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground text-sm">Coming in {phase}.</p>
-            </CardContent>
-          </Card>
-        ))}
+        {SECTIONS.map(({ icon: Icon, title, href, phase }) => {
+          const card = (
+            <Card
+              className={
+                href
+                  ? "h-full transition-colors hover:border-foreground/20"
+                  : "h-full border-dashed shadow-none"
+              }
+            >
+              <CardHeader>
+                <Icon className="text-muted-foreground size-5" />
+                <CardTitle className="text-base">{title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground text-sm">
+                  {href ? "Browse the library." : `Coming in ${phase}.`}
+                </p>
+              </CardContent>
+            </Card>
+          );
+
+          return href ? (
+            <Link key={title} href={href}>
+              {card}
+            </Link>
+          ) : (
+            <div key={title}>{card}</div>
+          );
+        })}
       </div>
     </div>
   );

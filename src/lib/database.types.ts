@@ -142,6 +142,187 @@ export type Database = {
         }
         Relationships: []
       }
+      ratings: {
+        Row: {
+          id: string
+          kitchen_id: string
+          recipe_id: string
+          score: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          kitchen_id: string
+          recipe_id: string
+          score: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          kitchen_id?: string
+          recipe_id?: string
+          score?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ratings_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_tags: {
+        Row: {
+          kitchen_id: string
+          recipe_id: string
+          tag_id: string
+        }
+        Insert: {
+          kitchen_id: string
+          recipe_id: string
+          tag_id: string
+        }
+        Update: {
+          kitchen_id?: string
+          recipe_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_tags_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_tags_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipes: {
+        Row: {
+          archived_at: string | null
+          base_servings: number
+          created_at: string
+          created_by: string | null
+          id: string
+          kitchen_id: string
+          last_reviewed_at: string | null
+          meal_type: Database["public"]["Enums"]["meal_type"]
+          method: string | null
+          name: string
+          notes: string | null
+          source_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          base_servings?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kitchen_id: string
+          last_reviewed_at?: string | null
+          meal_type?: Database["public"]["Enums"]["meal_type"]
+          method?: string | null
+          name: string
+          notes?: string | null
+          source_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          base_servings?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kitchen_id?: string
+          last_reviewed_at?: string | null
+          meal_type?: Database["public"]["Enums"]["meal_type"]
+          method?: string | null
+          name?: string
+          notes?: string | null
+          source_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipes_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          created_at: string
+          id: string
+          kitchen_id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kitchen_id: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kitchen_id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tags_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -154,7 +335,7 @@ export type Database = {
       shares_a_kitchen_with: { Args: { other: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      meal_type: "breakfast" | "lunch" | "dinner" | "dessert" | "snack"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -281,6 +462,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      meal_type: ["breakfast", "lunch", "dinner", "dessert", "snack"],
+    },
   },
 } as const
