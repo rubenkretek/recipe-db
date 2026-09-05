@@ -2,6 +2,7 @@ import { ExternalLink, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AddToPlanButton } from "@/components/recipes/add-to-plan-button";
 import { ArchiveButton } from "@/components/recipes/archive-button";
 import { IngredientList } from "@/components/recipes/ingredient-list";
 import { Markdown } from "@/components/recipes/markdown";
@@ -14,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { requireUserId } from "@/lib/auth";
+import { recipeIdsOnActivePlan } from "@/lib/plans";
 import { getRecipe } from "@/lib/recipes";
 
 /**
@@ -29,7 +31,11 @@ export default async function RecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [recipe, userId] = await Promise.all([getRecipe(id), requireUserId()]);
+  const [recipe, userId, recipeIdsOnPlan] = await Promise.all([
+    getRecipe(id),
+    requireUserId(),
+    recipeIdsOnActivePlan(),
+  ]);
 
   if (!recipe) {
     notFound();
@@ -48,7 +54,16 @@ export default async function RecipePage({
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl font-semibold">{recipe.name}</h1>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {/* Archived recipes cannot be planned, so the button is not shown
+                rather than shown and refused. */}
+            {!recipe.archivedAt && (
+              <AddToPlanButton
+                recipeId={recipe.id}
+                recipeName={recipe.name}
+                isOnPlan={recipeIdsOnPlan.has(recipe.id)}
+              />
+            )}
             <Button variant="secondary" asChild>
               <Link href={`/recipes/${recipe.id}/edit`}>
                 <Pencil className="size-4" />

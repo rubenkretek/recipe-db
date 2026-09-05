@@ -3,20 +3,13 @@ import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireKitchenContext } from "@/lib/kitchen";
+import { describePlanPeriod } from "@/lib/plan-dates";
+import { getActivePlanSummary } from "@/lib/plans";
 import { createClient } from "@/lib/supabase/server";
-
-/**
- * The three things the app does, in the order the core loop uses them.
- * Each gains a href in the phase that builds it. SPEC.md §8.
- */
-const SECTIONS = [
-  { icon: BookOpen, title: "Recipes", href: "/recipes", phase: null },
-  { icon: CalendarDays, title: "Meal plan", href: null, phase: "Phase 6" },
-  { icon: ShoppingCart, title: "Shopping list", href: null, phase: "Phase 7" },
-];
 
 export default async function DashboardPage() {
   const { active } = await requireKitchenContext();
+  const plan = await getActivePlanSummary();
   const supabase = await createClient();
 
   // Filtered by the active kitchen explicitly, even though RLS would already do
@@ -42,36 +35,57 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      {/* The three things the app does, in the order the core loop uses them.
+          Each gains a href in the phase that builds it. SPEC.md §8. */}
       <div className="grid gap-4 sm:grid-cols-3">
-        {SECTIONS.map(({ icon: Icon, title, href, phase }) => {
-          const card = (
-            <Card
-              className={
-                href
-                  ? "h-full transition-colors hover:border-foreground/20"
-                  : "h-full border-dashed shadow-none"
-              }
-            >
-              <CardHeader>
-                <Icon className="text-muted-foreground size-5" />
-                <CardTitle className="text-base">{title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-sm">
-                  {href ? "Browse the library." : `Coming in ${phase}.`}
-                </p>
-              </CardContent>
-            </Card>
-          );
+        <Link href="/recipes">
+          <Card className="h-full transition-colors hover:border-foreground/20">
+            <CardHeader>
+              <BookOpen className="text-muted-foreground size-5" />
+              <CardTitle className="text-base">Recipes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground text-sm">
+                Browse the library.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
 
-          return href ? (
-            <Link key={title} href={href}>
-              {card}
-            </Link>
-          ) : (
-            <div key={title}>{card}</div>
-          );
-        })}
+        <Link href="/plan">
+          <Card className="h-full transition-colors hover:border-foreground/20">
+            <CardHeader>
+              <CalendarDays className="text-muted-foreground size-5" />
+              <CardTitle className="text-base">
+                {plan?.name ?? "Meal plan"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground text-sm">
+                {!plan
+                  ? "No plan yet. Start one."
+                  : plan.recipeCount === 0
+                    ? `Empty. ${describePlanPeriod(plan.startsOn, null)}.`
+                    : `${plan.recipeCount} ${
+                        plan.recipeCount === 1 ? "recipe" : "recipes"
+                      }, ${plan.cookedCount} cooked. ${describePlanPeriod(
+                        plan.startsOn,
+                        null,
+                      )}.`}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Card className="h-full border-dashed shadow-none">
+          <CardHeader>
+            <ShoppingCart className="text-muted-foreground size-5" />
+            <CardTitle className="text-base">Shopping list</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground text-sm">Coming in Phase 7.</p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

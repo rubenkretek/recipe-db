@@ -1,4 +1,5 @@
 import { KitchenSwitcher } from "@/components/app/kitchen-switcher";
+import { MainNav } from "@/components/app/main-nav";
 import { UserMenu } from "@/components/app/user-menu";
 import { requireMyProfile } from "@/lib/auth";
 import { requireKitchenContext } from "@/lib/kitchen";
@@ -23,9 +24,12 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-svh flex-col">
       <header className="border-b">
-        <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-4 px-4">
+        <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-2 px-4">
           <KitchenSwitcher kitchens={kitchens} active={active} />
-          <UserMenu displayName={profile.display_name} />
+          <div className="flex items-center gap-2">
+            <MainNav />
+            <UserMenu displayName={profile.display_name} />
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">

@@ -14,7 +14,7 @@ const eslintConfig = [
     // every new signature — worse than not optimising at all. The files are
     // already resized to 1600px JPEG in the browser before upload, so there is
     // nothing left for the optimiser to do. Decided in Phase 3.
-    files: ["src/components/recipes/**/*.tsx"],
+    files: ["src/components/recipes/**/*.tsx", "src/components/plan/**/*.tsx"],
     rules: {
       "@next/next/no-img-element": "off",
     },

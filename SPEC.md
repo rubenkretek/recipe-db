@@ -399,16 +399,41 @@ meal_plans (
 )
 -- create unique index on meal_plans (kitchen_id) where status = 'active';
 
+-- create unique index on meal_plans (kitchen_id) where status = 'active';
+-- The partial index is the backstop, not the mechanism: it is checked per
+-- statement rather than deferred to commit, so complete_meal_plan() must mark
+-- the old plan complete BEFORE inserting the new one or it fires every time.
+-- create index on meal_plans (kitchen_id);
+-- meal_plans also carries unique (id, kitchen_id) so meal_plan_recipes can
+-- reference the pair. Phase 6.
+
 meal_plan_recipes (
   id            uuid primary key,
-  kitchen_id    uuid not null,
-  meal_plan_id  uuid not null references meal_plans(id) on delete cascade,
-  recipe_id     uuid not null references recipes(id) on delete cascade,
-  servings      int not null,             -- defaults to recipe.base_servings when added
+  -- §5.6 originally declared kitchen_id with no `references` clause — the sixth
+  -- table with that omission. Added in Phase 6.
+  kitchen_id    uuid not null references kitchens(id) on delete cascade,
+  meal_plan_id  uuid not null,
+  recipe_id     uuid not null,
+  servings      int not null check (servings > 0),  -- defaults to recipe.base_servings
   sort_order    int not null default 0,
   cooked_at     timestamptz,              -- optional tick as you go
-  created_at    timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+  -- COMPOSITE foreign keys, per §5.8. Added in Phase 6.
+  foreign key (meal_plan_id, kitchen_id)
+    references meal_plans (id, kitchen_id) on delete cascade,
+  foreign key (recipe_id, kitchen_id)
+    references recipes (id, kitchen_id) on delete cascade
 )
+-- create index on meal_plan_recipes (kitchen_id);
+-- create index on meal_plan_recipes (meal_plan_id, sort_order);
+-- create index on meal_plan_recipes (recipe_id);
+-- §5.6 specified no indexes at all. The second is the plan screen's only query;
+-- the third answers "is this recipe already on the plan" for the Add button and
+-- "when did we last cook this" for Phase 9. All added in Phase 6.
+--
+-- Deliberately NO unique constraint on (meal_plan_id, recipe_id): cooking the
+-- same thing twice in one period is real, and Phase 7's added-ingredients table
+-- keys on meal_plan_recipe_id, so duplicates stay safe there too.
 
 -- Records which ingredients have already been sent to the shopping list, so the
 -- picker can show "already added" and the plan can show "6 of 8 added".
@@ -533,9 +558,17 @@ read it. Discovered in Phase 5.
 The fix is a **composite foreign key**: give the parent a unique constraint on
 `(id, kitchen_id)` and have the join table reference that pair rather than the id
 alone. The invariant then holds against the app, a direct API call and anything
-else, with no trigger to maintain. `ingredient_supermarkets` does this. The join
-tables from earlier phases — `recipe_tags`, `recipe_ingredients`, `recipe_photos`
-and `ratings` — do **not** yet, and the same gap is open on all four.
+else, with no trigger to maintain.
+
+**Every join table now does this.** `ingredient_supermarkets` was fixed in
+Phase 5; `recipe_tags`, `recipe_ingredients`, `recipe_photos` and `ratings` in
+Phase 6, once `recipes (id, kitchen_id)` had to exist for `meal_plan_recipes`
+anyway. Verified by probing each one as a member of two kitchens: every straddling
+write is refused with `23503`. `recipes`, `tags`, `ingredients`, `supermarkets`
+and `meal_plans` all carry the `unique (id, kitchen_id)` these point at.
+
+**Any new join table must use this shape.** A single-column foreign key on a
+kitchen-scoped table is a bug, not a simplification.
 
 ---
 
@@ -733,6 +766,33 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 **Acceptance:**
 - Adding six recipes at varying servings and completing the plan produces a new empty active plan and a read-only archived one.
 - There is never more than one active plan, enforced by the partial unique index.
+
+**Decided during Phase 6:**
+
+- **§6.4 spans two phases.** Four of its six steps touch `shopping_lists`, which
+  is Phase 7, so `complete_meal_plan()` today does steps 1 and 3 — the whole of
+  the plan half — and grows to cover the rest in Phase 7. It is an RPC from the
+  start, as §6.4 asks, because a dropped connection between the update and the
+  insert is exactly what would leave a kitchen with no active plan.
+- **The completion RPC is `security invoker`**, like `merge_ingredients`. RLS
+  still applies to every statement inside it, so it cannot be used to reach
+  another kitchen's plan, and there is no policy-recursion reason to escalate.
+- **A kitchen starts its first plan with a button.** Completing a plan creates
+  the next one, so this only ever happens once; it is not created on first visit
+  because a Server Component cannot write during render.
+- **A recipe may appear on a plan twice.** No unique constraint. The Add button
+  shows an "on the plan" state so the second add is deliberate rather than
+  accidental.
+- **Servings persist here, unlike the recipe page's stepper**, which is display
+  only (§6.2). The write is debounced so holding `+` is one round trip.
+- **Removing a recipe from a plan is a plain delete with no undo** until Phase 7.
+  §9 decision 8 asks for a toast and an undo, but the thing it needs to explain —
+  ingredients left behind on the shopping list — does not exist yet.
+- **"Copy to current plan" copies recipes and servings, resets `cooked_at`, and
+  does not deduplicate** against what is already on the target plan.
+- **Navigation was added to the app shell.** §7 lists `/plan` in the routes table
+  but the shell had no nav; with more than one destination the dashboard cards
+  stopped being enough.
 
 ---
 
