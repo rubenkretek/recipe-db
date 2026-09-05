@@ -17,14 +17,20 @@ export function Markdown({ children }: { children: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          // Demoted one level: the page already owns the h1, so a method's
+          // "# " must not compete with the recipe title for outline order.
+          // Sizes are set explicitly because the surrounding body text is
+          // text-sm, and the browser defaults would leave h3 no larger than it.
           h1: ({ children }) => (
-            <h2 className="mt-2 text-lg font-semibold">{children}</h2>
+            <h2 className="mt-4 text-xl font-semibold first:mt-0">{children}</h2>
           ),
           h2: ({ children }) => (
-            <h3 className="mt-2 text-base font-semibold">{children}</h3>
+            <h3 className="mt-4 text-lg font-semibold first:mt-0">{children}</h3>
           ),
           h3: ({ children }) => (
-            <h4 className="mt-2 text-sm font-semibold">{children}</h4>
+            <h4 className="mt-3 text-base font-semibold first:mt-0">
+              {children}
+            </h4>
           ),
           p: ({ children }) => <p>{children}</p>,
           ul: ({ children }) => (
