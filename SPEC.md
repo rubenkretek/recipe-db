@@ -340,11 +340,24 @@ supermarkets (
 
 -- An ingredient can be bought at several supermarkets.
 ingredient_supermarkets (
-  ingredient_id  uuid references ingredients(id) on delete cascade,
-  supermarket_id uuid references supermarkets(id) on delete cascade,
-  kitchen_id     uuid not null,
-  primary key (ingredient_id, supermarket_id)
+  ingredient_id  uuid not null,
+  supermarket_id uuid not null,
+  kitchen_id     uuid not null references kitchens(id) on delete cascade,
+  primary key (ingredient_id, supermarket_id),
+  -- COMPOSITE foreign keys, not single-column ones. Referencing
+  -- (id, kitchen_id) forces the parent's kitchen to equal this row's kitchen,
+  -- so a row cannot link an ingredient and a supermarket from two different
+  -- kitchens. Added in Phase 5 after the verification proved a member of two
+  -- kitchens could otherwise write exactly that. See §5.8.
+  foreign key (ingredient_id, kitchen_id)
+    references ingredients (id, kitchen_id) on delete cascade,
+  foreign key (supermarket_id, kitchen_id)
+    references supermarkets (id, kitchen_id) on delete cascade
 )
+-- create index on ingredient_supermarkets (supermarket_id);
+-- The primary key leads with ingredient_id, so it answers "which shops sell
+-- this ingredient" but not "which ingredients are at this shop" — the central
+-- query of the shopping screen. Added in Phase 5.
 
 recipe_ingredients (
   id            uuid primary key,
@@ -509,6 +522,20 @@ Special cases:
 - Storage bucket `recipe-photos`: private, with a policy keyed on the kitchen id being the first path segment (`{kitchen_id}/{recipe_id}/{uuid}.jpg`). Serve via signed URLs.
 
 **Add an index on `kitchen_id` for every table.** Every query filters on it.
+
+**RLS validates the column, not the relationship.** A policy of
+`is_kitchen_member(kitchen_id)` proves the caller belongs to the kitchen the row
+*claims*, and nothing more. On a join table it does not check that the rows being
+joined actually live in that kitchen, so a user who belongs to two kitchens can
+write a row that straddles them — and every member of the stated kitchen can then
+read it. Discovered in Phase 5.
+
+The fix is a **composite foreign key**: give the parent a unique constraint on
+`(id, kitchen_id)` and have the join table reference that pair rather than the id
+alone. The invariant then holds against the app, a direct API call and anything
+else, with no trigger to maintain. `ingredient_supermarkets` does this. The join
+tables from earlier phases — `recipe_tags`, `recipe_ingredients`, `recipe_photos`
+and `ratings` — do **not** yet, and the same gap is open on all four.
 
 ---
 
@@ -688,6 +715,12 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 **Scope:** `supermarkets`, `ingredient_supermarkets`. Manage supermarkets in settings with reordering. Assign one or more supermarkets to an ingredient, both from the ingredient manager and inline while editing a recipe. A default-supermarket prompt when a new ingredient is created.
 
 **Acceptance:** an ingredient can be assigned to two supermarkets and appears under both; a new ingredient with no assignment is still usable and lands in the "Unassigned" group.
+
+**Decided during Phase 5:**
+
+- **"Unassigned" is observable in the ingredient manager**, which groups by supermarket with an "Unassigned" group at the end. The spec's wording describes the shopping list, which is Phase 7 — without somewhere to appear now, neither acceptance criterion could be checked for two more phases. An ingredient assigned to two shops appears under both groups: this is not a partition.
+- **A supermarket can be deleted**, behind a confirmation naming how many ingredients lose the assignment. The cascade takes only the join rows; no ingredient is harmed. This is unlike ingredients, which cannot be deleted at all while a recipe uses them.
+- **Assignment is ingredient-level shared state**, edited from three places and saved immediately in all of them. Changing it inside one recipe changes it for every recipe using that ingredient, so the control says so.
 
 ---
 

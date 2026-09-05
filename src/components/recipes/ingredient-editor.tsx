@@ -29,6 +29,7 @@ import {
   type UseFormSetValue,
 } from "react-hook-form";
 
+import { SupermarketPickerButton } from "@/components/ingredients/supermarket-picker";
 import {
   IngredientCombobox,
   type IngredientOption,
@@ -44,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { Supermarket } from "@/lib/supermarkets";
 import { UNITS, type Dimension } from "@/lib/units";
 import type { RecipeFormInput, RecipeFormValues } from "@/schemas/recipe";
 
@@ -75,11 +77,16 @@ export function IngredientEditor({
   register,
   setValue,
   allIngredients,
+  supermarkets,
+  assignmentsByIngredient,
 }: {
   control: Control<RecipeFormInput, unknown, RecipeFormValues>;
   register: UseFormRegister<RecipeFormInput>;
   setValue: UseFormSetValue<RecipeFormInput>;
   allIngredients: IngredientOption[];
+  supermarkets: Supermarket[];
+  /** Ingredient id to its assigned supermarket ids, for the row picker. */
+  assignmentsByIngredient: Record<string, string[]>;
 }) {
   const { fields, append, remove, move } = useFieldArray({
     control,
@@ -149,6 +156,8 @@ export function IngredientEditor({
                   setValue={setValue}
                   options={options}
                   onOptionCreated={rememberOption}
+                  supermarkets={supermarkets}
+                  assignmentsByIngredient={assignmentsByIngredient}
                   onRemove={() => remove(index)}
                 />
               ))}
@@ -186,6 +195,8 @@ function IngredientRow({
   setValue,
   options,
   onOptionCreated,
+  supermarkets,
+  assignmentsByIngredient,
   onRemove,
 }: {
   id: string;
@@ -195,6 +206,8 @@ function IngredientRow({
   setValue: UseFormSetValue<RecipeFormInput>;
   options: IngredientOption[];
   onOptionCreated: (ingredient: IngredientOption) => void;
+  supermarkets: Supermarket[];
+  assignmentsByIngredient: Record<string, string[]>;
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -204,6 +217,10 @@ function IngredientRow({
   // state, so an existing recipe opens with its values already shown. Local
   // state initialised to null would render every row blank on the edit page.
   const unit = useWatch({ control, name: `ingredients.${index}.unit` });
+  const ingredientId = useWatch({
+    control,
+    name: `ingredients.${index}.ingredientId`,
+  });
 
   return (
     <li
@@ -289,10 +306,24 @@ function IngredientRow({
                   }
                 }}
                 onOptionCreated={onOptionCreated}
+                supermarkets={supermarkets}
               />
             )}
           />
         </div>
+
+        {/*
+          Supermarket assignment belongs to the ingredient, not to this recipe
+          line, so it saves immediately and applies everywhere. The popover says
+          so. Only shown once an ingredient is actually picked.
+        */}
+        {ingredientId && (
+          <SupermarketPickerButton
+            ingredientId={ingredientId}
+            supermarkets={supermarkets}
+            assignedIds={assignmentsByIngredient[ingredientId] ?? []}
+          />
+        )}
 
         <Button
           type="button"

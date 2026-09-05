@@ -5,6 +5,7 @@ import { RecipeForm } from "@/components/recipes/recipe-form";
 import { requireKitchenContext } from "@/lib/kitchen";
 import { listIngredients } from "@/lib/ingredients";
 import { getRecipe, listTags } from "@/lib/recipes";
+import { listSupermarkets } from "@/lib/supermarkets";
 
 export default async function EditRecipePage({
   params,
@@ -12,18 +13,26 @@ export default async function EditRecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [recipe, allTags, ingredients, { active }] = await Promise.all([
-    getRecipe(id),
-    listTags(),
-    listIngredients(),
-    requireKitchenContext(),
-  ]);
+  const [recipe, allTags, ingredients, supermarkets, { active }] =
+    await Promise.all([
+      getRecipe(id),
+      listTags(),
+      listIngredients(),
+      listSupermarkets(),
+      requireKitchenContext(),
+    ]);
 
   const allIngredients = ingredients.map((ingredient) => ({
     id: ingredient.id,
     name: ingredient.name,
     defaultUnit: ingredient.defaultUnit,
   }));
+
+  // Ingredient id to its supermarkets, so the editor's row picker can show the
+  // current assignment without another query per row.
+  const assignmentsByIngredient = Object.fromEntries(
+    ingredients.map((ingredient) => [ingredient.id, ingredient.supermarketIds]),
+  );
 
   if (!recipe) {
     notFound();
@@ -47,6 +56,8 @@ export default async function EditRecipePage({
       <RecipeForm
         allTags={allTags}
         allIngredients={allIngredients}
+        supermarkets={supermarkets}
+        assignmentsByIngredient={assignmentsByIngredient}
         recipe={recipe}
       />
     </div>

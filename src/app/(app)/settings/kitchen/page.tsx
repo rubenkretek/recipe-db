@@ -3,6 +3,7 @@ import Link from "next/link";
 import { InvitePanel } from "@/components/settings/invite-panel";
 import { LeaveKitchenButton } from "@/components/settings/leave-kitchen-button";
 import { RenameKitchenForm } from "@/components/settings/rename-kitchen-form";
+import { SupermarketManager } from "@/components/settings/supermarket-manager";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,6 +15,7 @@ import {
 import { requireUserId } from "@/lib/auth";
 import { requireKitchenContext } from "@/lib/kitchen";
 import { createClient } from "@/lib/supabase/server";
+import { listSupermarkets } from "@/lib/supermarkets";
 
 /**
  * Kitchen settings. SPEC.md §7.
@@ -28,6 +30,8 @@ export default async function KitchenSettingsPage() {
 
   // Both queries filter by the active kitchen explicitly, even though RLS would
   // already do it. RLS is the safety net, not the filter. CLAUDE.md.
+  const supermarkets = await listSupermarkets();
+
   const [{ data: members }, { data: invites }] = await Promise.all([
     supabase
       .from("kitchen_members")
@@ -93,6 +97,19 @@ export default async function KitchenSettingsPage() {
             code={liveInvite?.code ?? null}
             expiresAt={liveInvite?.expires_at ?? null}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Supermarkets</CardTitle>
+          <CardDescription>
+            The shops you buy from. Drag to set the order they appear in when
+            you are shopping.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SupermarketManager supermarkets={supermarkets} />
         </CardContent>
       </Card>
 

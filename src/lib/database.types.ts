@@ -53,6 +53,46 @@ export type Database = {
           },
         ]
       }
+      ingredient_supermarkets: {
+        Row: {
+          ingredient_id: string
+          kitchen_id: string
+          supermarket_id: string
+        }
+        Insert: {
+          ingredient_id: string
+          kitchen_id: string
+          supermarket_id: string
+        }
+        Update: {
+          ingredient_id?: string
+          kitchen_id?: string
+          supermarket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredient_supermarkets_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingredient_supermarkets_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingredient_supermarkets_supermarket_id_fkey"
+            columns: ["supermarket_id"]
+            isOneToOne: false
+            referencedRelation: "supermarkets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ingredients: {
         Row: {
           category: string | null
@@ -461,6 +501,38 @@ export type Database = {
           },
           {
             foreignKeyName: "recipes_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supermarkets: {
+        Row: {
+          created_at: string
+          id: string
+          kitchen_id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kitchen_id: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kitchen_id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supermarkets_kitchen_id_fkey"
             columns: ["kitchen_id"]
             isOneToOne: false
             referencedRelation: "kitchens"

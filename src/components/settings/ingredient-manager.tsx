@@ -24,7 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ManagedIngredient } from "@/lib/ingredients";
+import { SupermarketChips } from "@/components/ingredients/supermarket-picker";
+import type { IngredientGroup, ManagedIngredient } from "@/lib/ingredients";
+import type { Supermarket } from "@/lib/supermarkets";
 import { INPUT_UNITS } from "@/lib/units";
 import {
   mergeIngredients,
@@ -45,8 +47,12 @@ const NO_UNIT = "none";
  */
 export function IngredientManager({
   ingredients,
+  supermarkets,
+  groups,
 }: {
   ingredients: ManagedIngredient[];
+  supermarkets: Supermarket[];
+  groups: IngredientGroup[];
 }) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -76,8 +82,24 @@ export function IngredientManager({
 
   return (
     <>
-      <ul className="flex flex-col divide-y rounded-lg border">
-        {ingredients.map((ingredient) => (
+      {groups.map((group) => (
+        <section key={group.supermarketId ?? "unassigned"} className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium">
+            {group.name}
+            <span className="text-muted-foreground font-normal">
+              {" "}
+              ({group.ingredients.length})
+            </span>
+          </h2>
+          {group.ingredients.length === 0 ? (
+            <p className="text-muted-foreground rounded-lg border border-dashed px-4 py-4 text-center text-xs">
+              {group.supermarketId === null
+                ? "Everything has a supermarket."
+                : "Nothing assigned here yet."}
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y rounded-lg border">
+              {group.ingredients.map((ingredient) => (
           <li
             key={ingredient.id}
             className="flex flex-wrap items-center gap-3 p-3"
@@ -119,15 +141,22 @@ export function IngredientManager({
               </form>
             ) : (
               <>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{ingredient.name}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {ingredient.usageCount === 0
-                      ? "Not used yet"
-                      : `Used in ${ingredient.usageCount} ${
-                          ingredient.usageCount === 1 ? "recipe" : "recipes"
-                        }`}
-                  </p>
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <div>
+                    <p className="text-sm font-medium">{ingredient.name}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {ingredient.usageCount === 0
+                        ? "Not used yet"
+                        : `Used in ${ingredient.usageCount} ${
+                            ingredient.usageCount === 1 ? "recipe" : "recipes"
+                          }`}
+                    </p>
+                  </div>
+                  <SupermarketChips
+                    ingredientId={ingredient.id}
+                    supermarkets={supermarkets}
+                    assignedIds={ingredient.supermarketIds}
+                  />
                 </div>
 
                 <Select
@@ -185,8 +214,11 @@ export function IngredientManager({
               </>
             )}
           </li>
-        ))}
-      </ul>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
 
       <MergeDialog
         source={mergeSource}

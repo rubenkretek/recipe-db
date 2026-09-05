@@ -7,10 +7,13 @@ export type ManagedIngredient = {
   defaultUnit: string | null;
   /** How many recipes use it. Drives the merge decision. */
   usageCount: number;
+  /** Ids of the supermarkets it is assigned to. Empty means unassigned. */
+  supermarketIds: string[];
 };
 
 /**
- * Every ingredient in the active kitchen, alphabetically, with a usage count.
+ * Every ingredient in the active kitchen, alphabetically, with a usage count
+ * and its supermarket assignments.
  *
  * The count is what makes the manager usable: you cannot sensibly decide which
  * of "chicken breast" and "Chicken Breasts" to keep without knowing that one is
@@ -27,7 +30,11 @@ export async function listIngredients(): Promise<ManagedIngredient[]> {
   // it. RLS is the safety net, not the filter. See CLAUDE.md "Multi-tenancy".
   const { data, error } = await supabase
     .from("ingredients")
-    .select("id, name, default_unit, recipe_ingredients ( recipe_id )")
+    .select(
+      `id, name, default_unit,
+       recipe_ingredients ( recipe_id ),
+       ingredient_supermarkets ( supermarket_id )`,
+    )
     .eq("kitchen_id", active.id)
     .order("name", { ascending: true });
 
@@ -44,5 +51,53 @@ export async function listIngredients(): Promise<ManagedIngredient[]> {
     usageCount: new Set(
       (ingredient.recipe_ingredients ?? []).map((row) => row.recipe_id),
     ).size,
+    supermarketIds: (ingredient.ingredient_supermarkets ?? []).map(
+      (row) => row.supermarket_id,
+    ),
   }));
+}
+
+export type IngredientGroup = {
+  /** Null for the "Unassigned" group, which always sorts last. */
+  supermarketId: string | null;
+  name: string;
+  ingredients: ManagedIngredient[];
+};
+
+/**
+ * Groups ingredients by supermarket, with an "Unassigned" group at the end.
+ *
+ * An ingredient assigned to two shops appears under **both** — this is not a
+ * partition. That is SPEC.md §8 Phase 5 acceptance criterion 1, and the group
+ * for ingredients assigned nowhere is criterion 2. Until the shopping list
+ * exists in Phase 7, this view is the only place either can be observed.
+ *
+ * Pure: takes what `listIngredients` and `listSupermarkets` already fetched
+ * rather than querying again.
+ */
+export function groupIngredientsBySupermarket(
+  ingredients: ManagedIngredient[],
+  supermarkets: { id: string; name: string }[],
+): IngredientGroup[] {
+  const groups: IngredientGroup[] = supermarkets.map((supermarket) => ({
+    supermarketId: supermarket.id,
+    name: supermarket.name,
+    ingredients: ingredients.filter((ingredient) =>
+      ingredient.supermarketIds.includes(supermarket.id),
+    ),
+  }));
+
+  const unassigned = ingredients.filter(
+    (ingredient) => ingredient.supermarketIds.length === 0,
+  );
+
+  // Always present, even when empty, so the concept is visible before anything
+  // has been assigned.
+  groups.push({
+    supermarketId: null,
+    name: "Unassigned",
+    ingredients: unassigned,
+  });
+
+  return groups;
 }

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { RecipeDetail, RecipeTag } from "@/lib/recipes";
+import type { Supermarket } from "@/lib/supermarkets";
 import { UNITS } from "@/lib/units";
 import {
   MEAL_TYPES,
@@ -72,10 +73,14 @@ const MEAL_TYPE_LABELS: Record<(typeof MEAL_TYPES)[number], string> = {
 export function RecipeForm({
   allTags,
   allIngredients,
+  supermarkets,
+  assignmentsByIngredient,
   recipe,
 }: {
   allTags: RecipeTag[];
   allIngredients: IngredientOption[];
+  supermarkets: Supermarket[];
+  assignmentsByIngredient: Record<string, string[]>;
   recipe?: RecipeDetail;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
@@ -206,6 +211,8 @@ export function RecipeForm({
           register={register}
           setValue={setValue}
           allIngredients={allIngredients}
+          supermarkets={supermarkets}
+          assignmentsByIngredient={assignmentsByIngredient}
         />
       </div>
 
