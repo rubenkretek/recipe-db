@@ -153,6 +153,9 @@ export function PlanBoard({
 
   return (
     <DndContext
+      // Deterministic, so the accessibility id matches between server and
+      // client. See the note in `supermarket-manager.tsx`.
+      id="plan-board"
       sensors={sensors}
       collisionDetection={closestCenter}
       modifiers={[restrictToVerticalAxis, restrictToParentElement]}

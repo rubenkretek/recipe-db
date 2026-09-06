@@ -62,11 +62,22 @@ export function SupermarketManager({
 }) {
   const router = useRouter();
   const [items, setItems] = useState(supermarkets);
+  const [lastSupermarkets, setLastSupermarkets] = useState(supermarkets);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Supermarket | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // The list is held locally so a drag lands instantly, which means the props
+  // arriving after `router.refresh()` have to win — otherwise a newly added or
+  // renamed shop never appears until the page is reloaded by hand. Adjusted
+  // during render rather than in an effect, the same shape as `PlanBoard`.
+  // See CLAUDE.md "Syncing props into state belongs in render, not an effect".
+  if (supermarkets !== lastSupermarkets) {
+    setLastSupermarkets(supermarkets);
+    setItems(supermarkets);
+  }
 
   // Pointer for mouse, Touch for phones, Keyboard so reordering is reachable
   // without a pointer at all. Same sensors as the ingredient editor.
@@ -130,6 +141,12 @@ export function SupermarketManager({
         </p>
       ) : (
         <DndContext
+          // Explicit id, not optional. dnd-kit derives its accessibility
+          // `aria-describedby` from a MODULE-SCOPED counter, which on the
+          // server climbs for the life of the Node process and in the browser
+          // restarts at 0 — so the two disagree and React reports a hydration
+          // mismatch. Naming it makes the attribute deterministic.
+          id="supermarket-manager"
           sensors={sensors}
           collisionDetection={closestCenter}
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}

@@ -136,6 +136,9 @@ export function IngredientEditor({
         </p>
       ) : (
         <DndContext
+          // Deterministic, so the accessibility id matches between server and
+          // client. See the note in `supermarket-manager.tsx`.
+          id="ingredient-editor"
           sensors={sensors}
           collisionDetection={closestCenter}
           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
