@@ -42,6 +42,43 @@ export function roundCountForShopping(count: number): number {
 }
 
 /**
+ * Scales a stored quantity for the shopping list: raw, then rounded up.
+ *
+ * Deliberately NOT `roundCountForShopping(scaleQuantity(...))`. `scaleQuantity`
+ * rounds counts to the nearest half for the recipe view, and rounding a second
+ * time compounds the error downwards: a recipe for 5 using 6 eggs, planned for 1
+ * serving, needs 1.2 eggs. Rounding to the nearest half gives 1.0, and the
+ * ceiling of that is 1 — but you have to buy 2. Scaling raw and taking the
+ * ceiling once gives 2.
+ *
+ * Weight and volume behave identically in both functions; only counts diverge.
+ * SPEC.md §6.2.
+ */
+export function scaleQuantityForShopping(
+  quantity: number | null,
+  unit: string | null,
+  baseServings: number,
+  targetServings: number,
+): number | null {
+  if (quantity === null) {
+    return null;
+  }
+
+  if (baseServings <= 0) {
+    return quantity;
+  }
+
+  const scaled = quantity * (targetServings / baseServings);
+  const definition = unit ? UNITS[unit] : undefined;
+
+  if (definition?.dimension === "count") {
+    return roundCountForShopping(scaled);
+  }
+
+  return round(scaled, 2);
+}
+
+/**
  * Scales a stored quantity from the recipe's base servings to a target.
  *
  * Weight and volume round to at most 2 decimal places. Counts round to the

@@ -1,9 +1,28 @@
 import { requireKitchenContext } from "@/lib/kitchen";
 import { signedUrlsFor } from "@/lib/photo-urls";
+import { scaleQuantityForShopping } from "@/lib/servings";
 import { createClient } from "@/lib/supabase/server";
 import type { MealType } from "@/schemas/recipe";
 
 export type PlanStatus = "active" | "complete";
+
+/** One line in the ingredient picker. SPEC.md §6.3. */
+export type PlannedIngredient = {
+  ingredientId: string;
+  name: string;
+  /**
+   * BASE UNITS, already scaled to the planned servings and rounded for
+   * shopping — so this is the number that will land on the list, and the picker
+   * shows exactly what it is about to add.
+   */
+  quantity: number | null;
+  unit: string | null;
+  /**
+   * Already sent to the list for this planned recipe, so the picker starts it
+   * unticked and grey. It can still be ticked again if you genuinely want more.
+   */
+  alreadyAdded: boolean;
+};
 
 export type PlannedRecipe = {
   /** The `meal_plan_recipes` row id, which is what every mutation addresses. */
@@ -22,6 +41,10 @@ export type PlannedRecipe = {
    * plan — removing it silently would be worse — but says so.
    */
   archivedAt: string | null;
+  /** What the picker offers, scaled to `servings`. Empty for a bare recipe. */
+  ingredients: PlannedIngredient[];
+  /** How many of them have already been sent, for the "6 of 8 added" subtitle. */
+  addedCount: number;
 };
 
 export type MealPlan = {
@@ -44,11 +67,22 @@ export type PlanSummary = {
   cookedCount: number;
 };
 
+// The ingredients and the added-ingredient rows are embedded here rather than
+// fetched separately by the picker, because the plan screen needs the counts
+// anyway to render "6 of 8 added" on every row.
 const PLAN_SELECT = `
   id, name, starts_on, ends_on, status, completed_at,
   meal_plan_recipes (
     id, recipe_id, servings, sort_order, cooked_at,
-    recipes ( name, meal_type, archived_at, recipe_photos ( storage_path, sort_order, id ) )
+    meal_plan_recipe_added_ingredients ( ingredient_id ),
+    recipes (
+      name, meal_type, archived_at, base_servings,
+      recipe_photos ( storage_path, sort_order, id ),
+      recipe_ingredients (
+        id, ingredient_id, quantity, unit, sort_order,
+        ingredients ( name )
+      )
+    )
   )
 `;
 
@@ -65,11 +99,21 @@ type PlanRow = {
     servings: number;
     sort_order: number;
     cooked_at: string | null;
+    meal_plan_recipe_added_ingredients: { ingredient_id: string }[];
     recipes: {
       name: string;
       meal_type: MealType;
       archived_at: string | null;
+      base_servings: number;
       recipe_photos: { id: string; storage_path: string; sort_order: number }[];
+      recipe_ingredients: {
+        id: string;
+        ingredient_id: string;
+        quantity: number | null;
+        unit: string | null;
+        sort_order: number;
+        ingredients: { name: string } | null;
+      }[];
     } | null;
   }[];
 };
@@ -89,6 +133,40 @@ function coverPathOf(
   return cover?.storage_path ?? null;
 }
 
+/**
+ * A planned recipe's ingredients, scaled to the servings it is planned for.
+ *
+ * Scaled with `scaleQuantityForShopping`, not the recipe view's scaler: counts
+ * round **up** here, because you cannot buy 1.5 onions, and rounding to the
+ * nearest half first would compound downwards. SPEC.md §6.2.
+ */
+function plannedIngredientsOf(
+  planned: PlanRow["meal_plan_recipes"][number],
+): PlannedIngredient[] {
+  const added = new Set(
+    (planned.meal_plan_recipe_added_ingredients ?? []).map(
+      (row) => row.ingredient_id,
+    ),
+  );
+
+  const baseServings = planned.recipes?.base_servings ?? 1;
+
+  return [...(planned.recipes?.recipe_ingredients ?? [])]
+    .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+    .map((ingredient) => ({
+      ingredientId: ingredient.ingredient_id,
+      name: ingredient.ingredients?.name ?? "Unknown ingredient",
+      quantity: scaleQuantityForShopping(
+        ingredient.quantity === null ? null : Number(ingredient.quantity),
+        ingredient.unit,
+        baseServings,
+        planned.servings,
+      ),
+      unit: ingredient.unit,
+      alreadyAdded: added.has(ingredient.ingredient_id),
+    }));
+}
+
 async function toMealPlan(row: PlanRow): Promise<MealPlan> {
   const paths = row.meal_plan_recipes
     .map((planned) => coverPathOf(planned.recipes?.recipe_photos ?? []))
@@ -101,6 +179,7 @@ async function toMealPlan(row: PlanRow): Promise<MealPlan> {
     .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
     .map((planned) => {
       const coverPath = coverPathOf(planned.recipes?.recipe_photos ?? []);
+      const ingredients = plannedIngredientsOf(planned);
       return {
         id: planned.id,
         recipeId: planned.recipe_id,
@@ -111,6 +190,8 @@ async function toMealPlan(row: PlanRow): Promise<MealPlan> {
         cookedAt: planned.cooked_at,
         coverUrl: coverPath ? (urls.get(coverPath) ?? null) : null,
         archivedAt: planned.recipes?.archived_at ?? null,
+        ingredients,
+        addedCount: ingredients.filter((one) => one.alreadyAdded).length,
       };
     });
 

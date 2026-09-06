@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, CalendarDays } from "lucide-react";
+import { BookOpen, CalendarDays, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -10,12 +10,13 @@ import { cn } from "@/lib/utils";
  * The app's primary navigation. SPEC.md §7.
  *
  * Added in Phase 6. With only the recipe library to reach, the dashboard cards
- * were enough; with a plan as well they are not. The shopping list joins this
- * in Phase 7.
+ * were enough; with a plan as well they are not. The shopping list joined it in
+ * Phase 7, which is the whole core loop: browse, plan, shop.
  */
 const LINKS = [
   { href: "/recipes", label: "Recipes", icon: BookOpen },
   { href: "/plan", label: "Plan", icon: CalendarDays },
+  { href: "/shopping", label: "Shop", icon: ShoppingCart },
 ];
 
 export function MainNav() {

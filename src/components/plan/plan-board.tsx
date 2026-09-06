@@ -22,12 +22,20 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, ImageIcon, Minus, Plus, X } from "lucide-react";
+import {
+  GripVertical,
+  ImageIcon,
+  Minus,
+  Plus,
+  ShoppingCart,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { IngredientPicker } from "@/components/plan/ingredient-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -202,10 +210,11 @@ function PlannedRecipeRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={
         isDragging
-          ? "bg-background relative z-10 flex items-center gap-3 p-3 shadow-lg"
-          : "flex items-center gap-3 p-3"
+          ? "bg-background relative z-10 flex flex-col gap-2 p-3 shadow-lg"
+          : "flex flex-col gap-2 p-3"
       }
     >
+      <div className="flex items-center gap-3">
       {!readOnly && (
         <button
           type="button"
@@ -300,6 +309,33 @@ function PlannedRecipeRow({
             <X className="size-4" />
           </Button>
         </>
+      )}
+      </div>
+
+      {/* On its own line: with a thumbnail, a stepper, a cooked tick and a
+          remove button already in the row, a fifth control alongside them is
+          unusable on a phone. SPEC.md §7 plan-screen detail. */}
+      {!readOnly && planned.ingredients.length > 0 && (
+        <IngredientPicker
+          recipes={[planned]}
+          mode="recipe"
+          trigger={
+            <Button
+              type="button"
+              variant={planned.addedCount > 0 ? "ghost" : "secondary"}
+              size="sm"
+              className="w-full justify-start"
+            >
+              <ShoppingCart className="size-4" />
+              Add ingredients
+              {planned.addedCount > 0 && (
+                <span className="text-muted-foreground font-normal">
+                  {planned.addedCount} of {planned.ingredients.length} added
+                </span>
+              )}
+            </Button>
+          }
+        />
       )}
     </li>
   );

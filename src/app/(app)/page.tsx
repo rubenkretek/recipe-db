@@ -5,11 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireKitchenContext } from "@/lib/kitchen";
 import { describePlanPeriod } from "@/lib/plan-dates";
 import { getActivePlanSummary } from "@/lib/plans";
+import { getUncheckedItemCount } from "@/lib/shopping";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
   const { active } = await requireKitchenContext();
-  const plan = await getActivePlanSummary();
+  const [plan, toBuy] = await Promise.all([
+    getActivePlanSummary(),
+    getUncheckedItemCount(),
+  ]);
   const supabase = await createClient();
 
   // Filtered by the active kitchen explicitly, even though RLS would already do
@@ -77,15 +81,21 @@ export default async function DashboardPage() {
           </Card>
         </Link>
 
-        <Card className="h-full border-dashed shadow-none">
-          <CardHeader>
-            <ShoppingCart className="text-muted-foreground size-5" />
-            <CardTitle className="text-base">Shopping list</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground text-sm">Coming in Phase 7.</p>
-          </CardContent>
-        </Card>
+        <Link href="/shopping">
+          <Card className="h-full transition-colors hover:border-foreground/20">
+            <CardHeader>
+              <ShoppingCart className="text-muted-foreground size-5" />
+              <CardTitle className="text-base">Shopping list</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground text-sm">
+                {toBuy === 0
+                  ? "Nothing to buy."
+                  : `${toBuy} ${toBuy === 1 ? "thing" : "things"} to get.`}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );

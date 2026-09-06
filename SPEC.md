@@ -398,8 +398,6 @@ meal_plans (
   created_at   timestamptz not null default now()
 )
 -- create unique index on meal_plans (kitchen_id) where status = 'active';
-
--- create unique index on meal_plans (kitchen_id) where status = 'active';
 -- The partial index is the backstop, not the mechanism: it is checked per
 -- statement rather than deferred to commit, so complete_meal_plan() must mark
 -- the old plan complete BEFORE inserting the new one or it fires every time.
@@ -464,28 +462,64 @@ shopping_lists (
 
 shopping_list_items (
   id               uuid primary key,
-  kitchen_id       uuid not null,
-  shopping_list_id uuid not null references shopping_lists(id) on delete cascade,
-  ingredient_id    uuid references ingredients(id) on delete set null,
+  kitchen_id       uuid not null references kitchens(id) on delete cascade,
+  shopping_list_id uuid not null,
+  ingredient_id    uuid,
   manual_name      text,             -- used when ingredient_id is null
   quantity         numeric,          -- BASE UNITS. null for unquantified or free-text items.
   unit             text,             -- 'g' | 'ml' | count unit
   is_checked       boolean not null default false,
-  checked_by       uuid references profiles(id),
+  checked_by       uuid references profiles(id) on delete set null,
   checked_at       timestamptz,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
-  check (ingredient_id is not null or manual_name is not null)
+  check (ingredient_id is not null or manual_name is not null),
+  foreign key (shopping_list_id, kitchen_id)
+    references shopping_lists (id, kitchen_id) on delete cascade,
+  -- COLUMN-SCOPED `set null`, which Postgres 15+ allows. A plain
+  -- `on delete set null` on a composite key nulls kitchen_id too, and that is
+  -- `not null`, so the delete would fail outright. Only the ingredient half may
+  -- be cleared. Phase 7.
+  foreign key (ingredient_id, kitchen_id)
+    references ingredients (id, kitchen_id) on delete set null (ingredient_id)
 )
+-- create index on shopping_list_items (kitchen_id);
+-- create index on shopping_list_items (shopping_list_id, is_checked);
+-- create index on shopping_list_items (ingredient_id);
+-- §5.7 originally specified no indexes. The second is the shopping screen's
+-- only query, run on every render and every tick; the third serves the merge
+-- lookup in §6.3 and the repointing in merge_ingredients(). Phase 7.
+--
+-- updated_at is maintained by the shared set_updated_at() trigger, so §6.3
+-- step 3 cannot be forgotten by a server action.
+--
+-- The `set null` above never actually fires: an ingredient cannot be deleted
+-- while a recipe uses it, and merge_ingredients() repoints these rows before
+-- deleting the source. Without that repointing the merge would abort, because
+-- a row with a null ingredient_id and a null manual_name violates the check
+-- constraint above. See §8 Phase 7.
 
 -- Copied from ingredient_supermarkets when the item is created, then independently editable.
 shopping_list_item_supermarkets (
-  item_id        uuid references shopping_list_items(id) on delete cascade,
-  supermarket_id uuid references supermarkets(id) on delete cascade,
-  kitchen_id     uuid not null,
-  primary key (item_id, supermarket_id)
+  item_id        uuid not null,
+  supermarket_id uuid not null,
+  kitchen_id     uuid not null references kitchens(id) on delete cascade,
+  primary key (item_id, supermarket_id),
+  -- COMPOSITE foreign keys, per §5.8. Phase 7.
+  foreign key (item_id, kitchen_id)
+    references shopping_list_items (id, kitchen_id) on delete cascade,
+  foreign key (supermarket_id, kitchen_id)
+    references supermarkets (id, kitchen_id) on delete cascade
 )
+-- create index on shopping_list_item_supermarkets (kitchen_id);
+-- create index on shopping_list_item_supermarkets (supermarket_id);
+-- The primary key leads with item_id, so it answers "which shops is this item
+-- under" but not "which items are at this shop" — what a chip selection asks.
 ```
+
+`shopping_lists` also carries `unique (id, kitchen_id)` and an index on
+`kitchen_id`, and `shopping_list_items` the same pair, so the composite foreign
+keys above have something to point at. Both added in Phase 7.
 
 An item exists **once** regardless of how many supermarkets it appears under. Ticking it sets `is_checked` on the item, so it disappears from every supermarket view at once. This is the behaviour requested and it falls out of the schema for free.
 
@@ -599,11 +633,36 @@ There is deliberately no conversion between dimensions and no fuzzy matching. If
 - Changing servings scales every quantity by `target / base_servings`. This is **display only** on the recipe page and is not persisted.
 - Ingredients with `quantity = null` never scale.
 - Rounding: weight and volume are rounded after unit selection to at most 2 decimal places. Counts are rounded to the nearest 0.5 in the recipe view, because half an onion is a real quantity, but **rounded up to a whole number on the shopping list**, because you cannot buy 1.5 onions.
+
+**The two roundings must not compose.** `scaleQuantity` bakes the nearest-half
+rule in, so applying `roundCountForShopping` to its output rounds twice and
+under-buys: a recipe for 5 using 6 eggs, planned for 1 serving, needs 1.2 eggs,
+which the half-rounding turns into 1.0 and the ceiling then leaves at 1 — one egg
+short. The shopping path therefore uses a separate
+`scaleQuantityForShopping(quantity, unit, base, target)`, which scales raw and
+takes the ceiling once. Weight and volume are identical in both; only counts
+diverge. Found and fixed in Phase 7, with a test pinning exactly this case.
 - When a recipe is added to a plan, the chosen servings is persisted on `meal_plan_recipes.servings` and is what the ingredient picker uses.
 
 ### 6.3 Adding ingredients to the shopping list — `src/lib/shopping-merge.ts`
 
 Nothing reaches the shopping list without an explicit action.
+
+**The module decides; the server action executes.** The five steps below are all
+queries, which cannot live in a pure tested module. So
+`planShoppingListAdditions(existingItems, candidates)` takes what is already on
+the list and what is being added, and returns a list of operations —
+`increment`, `keep` or `create`. `src/server/actions/shopping.ts` carries them
+out. That split is what makes "refuses to merge into a checked item" testable
+without a database. Decided in Phase 7.
+
+Candidates also merge **with each other**, not just into the list: the plan-wide
+picker adding two onions from one recipe and three from another produces one
+`create` of five, not two rows.
+
+The picker sends only identifiers. Quantities are recomputed server-side from the
+recipe and the planned servings, so a tampered request cannot state its own
+amount and all scaling goes through one path.
 
 **The picker.** Each recipe on the plan has an **Add ingredients** button. Pressing it opens a sheet listing every ingredient of that recipe, with quantities already scaled to the planned servings.
 
@@ -640,6 +699,20 @@ When a plan is marked complete, in a single transaction:
 6. Checked items stay on the archived list, which is kept read-only for history.
 
 Implement steps 1 to 6 as a single Postgres function called via RPC, so a dropped connection cannot leave a kitchen with two active plans or none.
+
+**Implemented in full as `complete_meal_plan()` in Phase 7.** Phase 6 built
+steps 1 and 3, the only ones whose tables existed then. Two ordering rules hold
+it together, both because a partial unique index is checked *per statement*
+rather than deferred to commit: the old plan is marked complete before the new
+one is inserted, and the old list is archived before the new one is created.
+Reverse either pair and it throws every time.
+
+Step 5 copies row by row rather than with one `insert ... select`, because each
+new item's id is needed to copy its supermarket assignments and `returning`
+cannot say which source row produced it. A household's list is tens of rows.
+
+A kitchen may have no active list at all — nothing forces one to exist until
+something is added — so steps 2 and 5 are conditional.
 
 ---
 
@@ -809,6 +882,40 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 - Ticking an item on the list removes it from every supermarket view at once.
 - Completing a plan carries three unticked items onto the new list and discards the ticked ones.
 - **This is the point at which the app replaces Google Keep, apart from live sync. Start using it.**
+
+**Decided during Phase 7:**
+
+- **The two count roundings do not compose**, and composing them under-buys. A
+  separate `scaleQuantityForShopping` scales raw and rounds up once. See §6.2 —
+  this was a live bug the moment any scaled count reached the list.
+- **`shopping-merge.ts` decides, the server action executes.** See §6.3.
+- **`merge_ingredients()` had to be extended**, or merging an ingredient that sat
+  on a shopping list would abort: deleting the source fires
+  `on delete set null (ingredient_id)`, and a row with no ingredient and no
+  manual name violates §5.7's own check constraint. It now repoints
+  `shopping_list_items` and `meal_plan_recipe_added_ingredients` first, exactly
+  as it already repointed `recipe_ingredients`. Two list lines that become the
+  same ingredient are deliberately **not** summed into one: that would be
+  quantity arithmetic in SQL, and §6.3's merge rule governs adding to the list
+  rather than renaming what is on it.
+- **Ticking is optimistic but not live.** `useOptimistic` makes a tap land
+  instantly on a patchy connection; Realtime and the offline queue are Phase 8,
+  so the other person's ticks appear on the next refresh. TanStack Query is
+  deliberately deferred to Phase 8, where there is a cache for Realtime to
+  update.
+- **The trailing menu is the only per-item control.** §7 offers a long-press as
+  an alternative; it fights the scroll gesture on a list being thumbed through,
+  and nothing advertises it.
+- **Free-text items never merge into anything.** §6.3 keys the match on
+  `ingredient_id`, and two lines both reading "birthday candles" are not
+  obviously the same thing.
+- **The plan-wide picker excludes already-added ingredients; the per-recipe one
+  greys them.** That is §7 and §6.3 respectively, and the difference is kept:
+  plan-wide is a bulk action where rows you cannot act on are noise.
+- **A shopping list needs no "start" step.** Unlike a plan, the first list is
+  created silently on the first add, so the empty screen is still usable.
+- **Empty supermarket groups are hidden** on the shopping screen, unlike the
+  ingredient manager where an empty shop is a prompt to fill it.
 
 ---
 

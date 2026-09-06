@@ -235,6 +235,49 @@ export type Database = {
           },
         ]
       }
+      meal_plan_recipe_added_ingredients: {
+        Row: {
+          added_at: string
+          ingredient_id: string
+          kitchen_id: string
+          meal_plan_recipe_id: string
+        }
+        Insert: {
+          added_at?: string
+          ingredient_id: string
+          kitchen_id: string
+          meal_plan_recipe_id: string
+        }
+        Update: {
+          added_at?: string
+          ingredient_id?: string
+          kitchen_id?: string
+          meal_plan_recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plan_recipe_added_ingred_meal_plan_recipe_id_kitchen__fkey"
+            columns: ["meal_plan_recipe_id", "kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plan_recipes"
+            referencedColumns: ["id", "kitchen_id"]
+          },
+          {
+            foreignKeyName: "meal_plan_recipe_added_ingredient_ingredient_id_kitchen_id_fkey"
+            columns: ["ingredient_id", "kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id", "kitchen_id"]
+          },
+          {
+            foreignKeyName: "meal_plan_recipe_added_ingredients_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meal_plan_recipes: {
         Row: {
           cooked_at: string | null
@@ -604,6 +647,162 @@ export type Database = {
           },
         ]
       }
+      shopping_list_item_supermarkets: {
+        Row: {
+          item_id: string
+          kitchen_id: string
+          supermarket_id: string
+        }
+        Insert: {
+          item_id: string
+          kitchen_id: string
+          supermarket_id: string
+        }
+        Update: {
+          item_id?: string
+          kitchen_id?: string
+          supermarket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_list_item_supermarkets_item_id_kitchen_id_fkey"
+            columns: ["item_id", "kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "shopping_list_items"
+            referencedColumns: ["id", "kitchen_id"]
+          },
+          {
+            foreignKeyName: "shopping_list_item_supermarkets_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_list_item_supermarkets_supermarket_id_kitchen_id_fkey"
+            columns: ["supermarket_id", "kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "supermarkets"
+            referencedColumns: ["id", "kitchen_id"]
+          },
+        ]
+      }
+      shopping_list_items: {
+        Row: {
+          checked_at: string | null
+          checked_by: string | null
+          created_at: string
+          id: string
+          ingredient_id: string | null
+          is_checked: boolean
+          kitchen_id: string
+          manual_name: string | null
+          quantity: number | null
+          shopping_list_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          ingredient_id?: string | null
+          is_checked?: boolean
+          kitchen_id: string
+          manual_name?: string | null
+          quantity?: number | null
+          shopping_list_id: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          ingredient_id?: string | null
+          is_checked?: boolean
+          kitchen_id?: string
+          manual_name?: string | null
+          quantity?: number | null
+          shopping_list_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_list_items_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_list_items_ingredient_id_kitchen_id_fkey"
+            columns: ["ingredient_id", "kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id", "kitchen_id"]
+          },
+          {
+            foreignKeyName: "shopping_list_items_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_list_items_shopping_list_id_kitchen_id_fkey"
+            columns: ["shopping_list_id", "kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "shopping_lists"
+            referencedColumns: ["id", "kitchen_id"]
+          },
+        ]
+      }
+      shopping_lists: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          kitchen_id: string
+          meal_plan_id: string | null
+          status: Database["public"]["Enums"]["list_status"]
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          kitchen_id: string
+          meal_plan_id?: string | null
+          status?: Database["public"]["Enums"]["list_status"]
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          kitchen_id?: string
+          meal_plan_id?: string | null
+          status?: Database["public"]["Enums"]["list_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_lists_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_lists_meal_plan_id_fkey"
+            columns: ["meal_plan_id"]
+            isOneToOne: false
+            referencedRelation: "meal_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supermarkets: {
         Row: {
           created_at: string
@@ -682,6 +881,7 @@ export type Database = {
       shares_a_kitchen_with: { Args: { other: string }; Returns: boolean }
     }
     Enums: {
+      list_status: "active" | "archived"
       meal_type: "breakfast" | "lunch" | "dinner" | "dessert" | "snack"
       plan_status: "active" | "complete"
     }
@@ -811,6 +1011,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      list_status: ["active", "archived"],
       meal_type: ["breakfast", "lunch", "dinner", "dessert", "snack"],
       plan_status: ["active", "complete"],
     },

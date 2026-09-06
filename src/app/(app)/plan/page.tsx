@@ -1,6 +1,7 @@
-import { History } from "lucide-react";
+import { History, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 
+import { IngredientPicker } from "@/components/plan/ingredient-picker";
 import { PlanBoard } from "@/components/plan/plan-board";
 import {
   CompletePlanButton,
@@ -74,11 +75,28 @@ export default async function PlanPage() {
 
       <PlanBoard recipes={plan.recipes} />
 
-      <div>
+      <div className="flex flex-wrap gap-2">
         <RecipePicker
           recipes={recipes}
           recipeIdsOnPlan={plan.recipes.map((planned) => planned.recipeId)}
         />
+
+        {/* Every not-yet-added ingredient across the whole plan, grouped under
+            recipe headings. SPEC.md §7 plan-screen detail. */}
+        {plan.recipes.some((planned) =>
+          planned.ingredients.some((one) => !one.alreadyAdded),
+        ) && (
+          <IngredientPicker
+            recipes={plan.recipes}
+            mode="plan"
+            trigger={
+              <Button type="button" variant="secondary">
+                <ShoppingCart className="size-4" />
+                Add ingredients for all recipes
+              </Button>
+            }
+          />
+        )}
       </div>
     </div>
   );
