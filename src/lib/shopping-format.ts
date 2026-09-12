@@ -21,6 +21,12 @@ export type ShoppingItem = {
   /** Who ticked it, for the "Got it" section. Null if nobody has. */
   checkedByName: string | null;
   checkedAt: string | null;
+  /**
+   * The server's `updated_at`. Carried so an offline tick can record the value
+   * it saw, which is the compare half of the compare-and-swap that decides
+   * whether it still applies on reconnect. See `src/lib/offline-queue.ts`.
+   */
+  updatedAt: string;
   /** Copied from the ingredient when the item was created, then editable. */
   supermarketIds: string[];
 };
@@ -31,6 +37,64 @@ export type ShoppingGroup = {
   name: string;
   items: ShoppingItem[];
 };
+
+/**
+ * The columns and embedded rows an item needs, wherever it is fetched from.
+ *
+ * Shared by the server query in `shopping.ts` and the browser query behind the
+ * shopping screen, so the two cannot drift into returning different shapes for
+ * the same row. Phase 8.
+ */
+export const ITEM_SELECT = `
+  id, ingredient_id, manual_name, quantity, unit, is_checked, checked_at, updated_at,
+  ingredients ( name ),
+  profiles ( display_name ),
+  shopping_list_item_supermarkets ( supermarket_id )
+`;
+
+/** One `shopping_list_items` row as PostgREST returns it under `ITEM_SELECT`. */
+export type ShoppingItemRow = {
+  id: string;
+  ingredient_id: string | null;
+  manual_name: string | null;
+  quantity: number | null;
+  unit: string | null;
+  is_checked: boolean;
+  checked_at: string | null;
+  updated_at: string;
+  ingredients: { name: string } | null;
+  profiles: { display_name: string } | null;
+  shopping_list_item_supermarkets: { supermarket_id: string }[];
+};
+
+/**
+ * Maps a raw row to the shape the screen renders.
+ *
+ * Client-safe and shared, for the same reason `ITEM_SELECT` is.
+ */
+export function toShoppingItem(row: ShoppingItemRow): ShoppingItem {
+  return {
+    id: row.id,
+    // One of the two is always present: the check constraint on the table
+    // guarantees it, so the fallback is defensive rather than expected.
+    name: row.ingredients?.name ?? row.manual_name ?? "Unnamed item",
+    ingredientId: row.ingredient_id,
+    quantity: row.quantity === null ? null : Number(row.quantity),
+    unit: row.unit,
+    isChecked: row.is_checked,
+    checkedByName: row.profiles?.display_name ?? null,
+    checkedAt: row.checked_at,
+    updatedAt: row.updated_at,
+    supermarketIds: (row.shopping_list_item_supermarkets ?? []).map(
+      (link) => link.supermarket_id,
+    ),
+  };
+}
+
+/** Alphabetical, which is the only ordering that helps until Phase 12's aisles. */
+export function sortItems(items: ShoppingItem[]): ShoppingItem[] {
+  return [...items].sort((a, b) => a.name.localeCompare(b.name));
+}
 
 /** The "All" chip's value. Not a uuid, so it cannot collide with a real one. */
 export const ALL_SUPERMARKETS = "all";

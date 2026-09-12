@@ -2,10 +2,12 @@
 
 import { ClipboardCopy, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useOptimistic, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { ConnectionIndicator } from "@/components/shopping/connection-indicator";
 import { ShoppingItemRow } from "@/components/shopping/shopping-item";
+import { useShoppingList } from "@/components/shopping/use-shopping-list";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,60 +30,37 @@ import {
   type ShoppingItem,
 } from "@/lib/shopping-format";
 import type { Supermarket } from "@/lib/supermarkets";
-import {
-  addManualItem,
-  clearList,
-  setItemChecked,
-} from "@/server/actions/shopping";
+import { addManualItem, clearList } from "@/server/actions/shopping";
 
 /**
- * The shopping screen. SPEC.md §7.
+ * The shopping screen. SPEC.md §7 and §8 Phase 8.
  *
- * Ticking is optimistic through `useOptimistic`, so a tap lands instantly on a
- * patchy supermarket connection rather than waiting for a round trip. This is
- * **not** live between phones: Realtime and the offline queue are Phase 8, so
- * the other person's ticks appear on the next refresh.
+ * The item list is owned by `useShoppingList` from Phase 8 onwards: it is live
+ * between phones, it keeps working with no connection, and it queues ticks made
+ * offline. The server-rendered items seed it so the first paint needs no fetch.
+ *
+ * Every other control here — adding, clearing, editing a quantity — still goes
+ * through a server action and still requires a connection, per §10.
  */
 export function ShoppingScreen({
-  items,
+  listId,
+  items: initialItems,
   supermarkets,
 }: {
+  listId: string | null;
   items: ShoppingItem[];
   supermarkets: Supermarket[];
 }) {
-  const router = useRouter();
   const [selected, setSelected] = useState<string>(ALL_SUPERMARKETS);
-  const [, startTransition] = useTransition();
 
-  const [optimisticItems, applyTick] = useOptimistic(
-    items,
-    (current: ShoppingItem[], tick: { itemId: string; isChecked: boolean }) =>
-      current.map((item) =>
-        item.id === tick.itemId ? { ...item, isChecked: tick.isChecked } : item,
-      ),
-  );
+  const { items, connection, pendingCount, toggle } = useShoppingList({
+    listId,
+    initialItems,
+  });
 
-  function toggle(item: ShoppingItem) {
-    startTransition(async () => {
-      applyTick({ itemId: item.id, isChecked: !item.isChecked });
+  const hasUnassigned = items.some((item) => item.supermarketIds.length === 0);
 
-      const result = await setItemChecked({
-        itemId: item.id,
-        isChecked: !item.isChecked,
-      });
-
-      if (result?.error) {
-        toast.error(result.error);
-      }
-      router.refresh();
-    });
-  }
-
-  const hasUnassigned = optimisticItems.some(
-    (item) => item.supermarketIds.length === 0,
-  );
-
-  const visible = filterBySupermarket(optimisticItems, selected);
+  const visible = filterBySupermarket(items, selected);
   const unchecked = visible.filter((item) => !item.isChecked);
   const checked = visible.filter((item) => item.isChecked);
 
@@ -112,7 +91,7 @@ export function ShoppingScreen({
           disabled={unchecked.length === 0}
           onClick={() => {
             const text = shoppingListText(
-              optimisticItems,
+              items,
               supermarkets,
               selected,
             );
@@ -128,10 +107,17 @@ export function ShoppingScreen({
           Copy
         </Button>
 
-        <ClearListButton itemCount={optimisticItems.length} />
+        <ClearListButton itemCount={items.length} />
+
+        <div className="ml-auto flex items-center">
+          <ConnectionIndicator
+            connection={connection}
+            pendingCount={pendingCount}
+          />
+        </div>
       </div>
 
-      {optimisticItems.length === 0 ? (
+      {items.length === 0 ? (
         <p className="text-muted-foreground rounded-lg border border-dashed px-4 py-10 text-center text-sm">
           Nothing on the list. Add ingredients from the plan, or type something
           below.

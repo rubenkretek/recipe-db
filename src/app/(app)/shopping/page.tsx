@@ -30,7 +30,11 @@ export default async function ShoppingPage() {
         </p>
       </div>
 
-      <ShoppingScreen items={items} supermarkets={supermarkets} />
+      <ShoppingScreen
+        listId={list?.id ?? null}
+        items={items}
+        supermarkets={supermarkets}
+      />
     </div>
   );
 }

@@ -72,7 +72,7 @@ Not being built now, but the schema should not actively prevent them:
 | Forms | `react-hook-form` + `zod` | Zod schemas shared between client validation and server actions. |
 | Client data cache | TanStack Query | Needed for optimistic updates and offline queueing on the shopping list. |
 | Offline storage | Dexie (IndexedDB) | Phase 8 only. |
-| PWA | Serwist | Phase 8 only. |
+| PWA | ~~Serwist~~ hand-written service worker | **Changed in Phase 8.** `@serwist/next` hooks the *webpack* config, and `next build` here runs Turbopack — Next 16's default — so adopting it would have meant moving the whole Coolify build to `next build --webpack` for one feature. Its main value is generating a precache manifest, and every route in this app is server-rendered on demand, so there is no static HTML to precache: only content-hashed `/_next/static/` assets, which one cache-first rule covers. `public/sw.js` is ~60 lines and has no build-time step. |
 | Dates | `date-fns` | |
 | Toasts | `sonner` (via shadcn) | |
 | Tests | Vitest | Minimal. Unit tests for `units.ts`, `servings.ts` and `shopping-merge.ts` only. |
@@ -511,6 +511,10 @@ shopping_list_item_supermarkets (
   foreign key (supermarket_id, kitchen_id)
     references supermarkets (id, kitchen_id) on delete cascade
 )
+-- shopping_list_items is published for Realtime — `alter publication
+-- supabase_realtime add table` — so Postgres Changes emits its updates. It is
+-- the only published table. Phase 8.
+--
 -- create index on shopping_list_item_supermarkets (kitchen_id);
 -- create index on shopping_list_item_supermarkets (supermarket_id);
 -- The primary key leads with item_id, so it answers "which shops is this item
@@ -928,6 +932,45 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 - Airplane mode: ticking five items, killing the app, reopening, and reconnecting results in all five ticks landing on the server.
 - The app can be installed to the home screen and opened cold with the list visible while offline.
 - **The app is now fully replacing both tools.**
+
+**Decided during Phase 8:**
+
+- **Ticking goes browser → Supabase directly, not through a server action.** A
+  server action is a request to the Next server, so it cannot work with no
+  connection, and a queued one cannot be replayed after a deploy because its
+  action id changes. RLS is the security boundary, exactly as it is for photo
+  uploads (§8 Phase 3). This is the **only** mutation with that shape: adding
+  items, editing quantities, the picker and everything on the plan still go
+  through server actions and still need a connection, per §10.
+- **Conflict resolution is compare-and-swap, not clock comparison.** §8 asks for
+  "last-write-wins by `updated_at`", but `updated_at` is set by a database
+  trigger and the queue only knows when the *tap* happened — two different
+  clocks. A queued tick instead records the `updated_at` it saw, and replays only
+  if the server still holds that value. Clock skew therefore cannot affect the
+  outcome, and the later real write still wins.
+- **`shopping_list_items` had to be added to the `supabase_realtime`
+  publication.** The publication existed but contained no tables, so Postgres
+  Changes emitted nothing at all. `replica identity` is left at its default: only
+  the *new* row is read, and the docs note that with RLS on, `old` carries just
+  primary keys anyway.
+- **Realtime invalidates the cache rather than patching it.** A Postgres Changes
+  payload is the raw row with none of its embedded relations, so a tick would
+  arrive without the ingredient's name or the ticker's display name. Refetching a
+  household-sized list is one small round trip and is always right.
+- **A channel reports `SUBSCRIBED` before its replication binding is live.** A
+  write in that window is never sent to that subscriber — not delayed, never
+  generated. It cost an hour of false failures in the verification, and it means
+  the first moment after a page loads can miss an event; the stale-time refetch
+  is the safety net.
+- **The service worker caches pages network-first and clears on sign-out.** These
+  pages are server-rendered and personal, so a cached copy is somebody's shopping
+  list; it is a fallback only, and `clearOfflineData()` wipes both the caches and
+  the Dexie queue when the session ends.
+- **`/sw.js` and `/manifest.webmanifest` are excluded from the auth proxy**, and
+  `/offline` is a public route. A service worker served as a redirect to `/login`
+  fails registration silently.
+- **The connection indicator lives only on `/shopping`.** It is the only screen
+  that works offline; anywhere else it would be promising something untrue.
 
 ---
 

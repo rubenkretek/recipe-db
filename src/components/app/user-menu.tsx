@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { clearOfflineData } from "@/lib/offline-db";
 import { logOut } from "@/server/actions/auth";
 
 /** First letters of a display name, for the avatar fallback. */
@@ -57,8 +58,13 @@ export function UserMenu({ displayName }: { displayName: string }) {
           disabled={isPending}
           onSelect={(event) => {
             event.preventDefault();
-            startTransition(() => {
-              void logOut();
+            startTransition(async () => {
+              // Before the session goes, not after: the service worker's cached
+              // pages are server-rendered and contain the shopping list itself,
+              // and the Dexie queue holds ticks not yet sent. Both would
+              // otherwise outlive the session on a shared phone. Phase 8.
+              await clearOfflineData();
+              await logOut();
             });
           }}
         >

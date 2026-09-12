@@ -1,0 +1,26 @@
+-- Phase 8, SPEC.md §8. Publish shopping_list_items for Realtime.
+--
+-- The `supabase_realtime` publication already existed on this project but
+-- contained no tables at all, so Postgres Changes emitted nothing. §8's central
+-- mechanism — "two phones on the same list see a tick appear within a second" —
+-- is inert without this.
+--
+-- Done as a migration rather than the dashboard's Publications toggle so the
+-- remote state stays reproducible from the repo. CLAUDE.md "Database workflow".
+--
+-- No schema change and no new RLS. Realtime applies the table's existing
+-- policies per subscriber, so a member of another kitchen receives nothing.
+alter publication supabase_realtime add table public.shopping_list_items;
+
+-- `replica identity` is deliberately left at its default (primary key).
+--
+-- Setting it to `full` is only needed to receive the *old* row on an update,
+-- which nothing here reads: a tick sends the whole new row, which is all the
+-- client needs to patch its cache. The Supabase docs also note that with RLS
+-- enabled the `old` record carries only primary keys regardless, so `full`
+-- would cost replication bandwidth and buy nothing.
+--
+-- Worth knowing: RLS is NOT applied to DELETE events, because Postgres cannot
+-- verify access to a row that no longer exists. A delete therefore reaches every
+-- subscriber — but it carries only the primary key, and the client subscribes
+-- with a filter scoped to one shopping list, so nothing readable leaks.

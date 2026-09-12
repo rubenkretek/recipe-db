@@ -6,8 +6,12 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * /join is here so an invite link works for someone who does not have an
  * account yet: it remembers the code and sends them to sign up first.
+ *
+ * /offline is the service worker's fallback page. It must never redirect: it is
+ * served precisely when there is no network, so a redirect to /login would
+ * itself fail and the browser would show its own error page instead. Phase 8.
  */
-const PUBLIC_ROUTES = ["/login", "/signup", "/join"];
+const PUBLIC_ROUTES = ["/login", "/signup", "/join", "/offline"];
 
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_ROUTES.some(
