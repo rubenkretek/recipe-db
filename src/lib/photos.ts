@@ -38,3 +38,35 @@ export function photoStoragePath(
 ): string {
   return `${kitchenId}/${recipeId}/${fileId}.jpg`;
 }
+
+/** Shown when a paste carries no image, so pasting never fails silently. */
+export const NO_CLIPBOARD_IMAGE =
+  "No image found on the clipboard. If you copied it from a website, save it and upload it instead.";
+
+/**
+ * The image files carried by a paste, or none.
+ *
+ * Reads `items` first and falls back to `files`, because browsers disagree about
+ * which one holds a pasted image — a screenshot usually appears in both, a file
+ * copied in Finder or Explorer sometimes in only one.
+ *
+ * Anything that is not an image is ignored. That includes the link-and-HTML some
+ * browsers put on the clipboard for "Copy image" on a web page, which cannot be
+ * rescued: fetching the linked image from another site is blocked by its CORS
+ * policy. Pasted screenshots arrive as PNG; the existing upload pipeline
+ * re-encodes them to JPEG like any other photo.
+ */
+export function imageFilesFromClipboard(data: DataTransfer | null): File[] {
+  if (!data) return [];
+
+  const fromItems = Array.from(data.items ?? [])
+    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+
+  if (fromItems.length > 0) return fromItems;
+
+  return Array.from(data.files ?? []).filter((file) =>
+    file.type.startsWith("image/"),
+  );
+}

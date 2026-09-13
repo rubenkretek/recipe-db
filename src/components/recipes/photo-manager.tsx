@@ -11,8 +11,10 @@ import {
   MAX_PHOTO_BYTES,
   MAX_PHOTO_DIMENSION,
   MAX_PHOTOS_PER_RECIPE,
+  NO_CLIPBOARD_IMAGE,
   PHOTO_BUCKET,
   PHOTO_QUALITY,
+  imageFilesFromClipboard,
   photoStoragePath,
 } from "@/lib/photos";
 import type { RecipePhoto } from "@/lib/recipes";
@@ -76,7 +78,28 @@ export function PhotoManager({
   const remaining = MAX_PHOTOS_PER_RECIPE - photos.length;
   const busy = isUploading || isPending;
 
-  async function onFilesChosen(fileList: FileList | null) {
+  /**
+   * Adds pasted images, through exactly the same path as chosen files.
+   *
+   * Only reachable once this section has focus — click it, then paste — so a
+   * paste into a text field elsewhere on the page is never taken as a photo.
+   */
+  function onPaste(event: React.ClipboardEvent<HTMLElement>) {
+    const images = imageFilesFromClipboard(event.clipboardData);
+    if (images.length === 0) {
+      toast.error(NO_CLIPBOARD_IMAGE);
+      return;
+    }
+
+    event.preventDefault();
+    if (busy) {
+      toast.error("Wait for the current upload to finish.");
+      return;
+    }
+    void onFilesChosen(images);
+  }
+
+  async function onFilesChosen(fileList: FileList | File[] | null) {
     if (!fileList || fileList.length === 0) return;
 
     const files = Array.from(fileList).slice(0, Math.max(remaining, 0));
@@ -146,13 +169,21 @@ export function PhotoManager({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-4">
+    <section
+      // Focusable so it can receive a paste. `focus`, not `focus-visible`: a
+      // mouse click never triggers focus-visible on a non-text element, so the
+      // ring would not appear and nothing would show the box is ready for ⌘V.
+      tabIndex={0}
+      onPaste={onPaste}
+      aria-label="Photos. Click here and paste to add a copied image."
+      className="focus:border-ring focus:ring-ring/50 flex flex-col gap-3 rounded-lg border p-4 outline-none focus:ring-[3px]"
+    >
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-sm font-medium">Photos</h2>
           <p className="text-muted-foreground text-xs">
             Saved as you go, separately from the rest of the form. The first is
-            the cover.
+            the cover. Click this box and paste to add a copied image.
           </p>
         </div>
         <Button

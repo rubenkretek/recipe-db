@@ -38,7 +38,12 @@ import { MethodEditor } from "@/components/recipes/method-editor";
 import { prepareForUpload } from "@/components/recipes/photo-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PHOTO_BUCKET, photoStoragePath } from "@/lib/photos";
+import {
+  NO_CLIPBOARD_IMAGE,
+  PHOTO_BUCKET,
+  imageFilesFromClipboard,
+  photoStoragePath,
+} from "@/lib/photos";
 import { createClient } from "@/lib/supabase/client";
 import {
   BLANK_STEP,
@@ -268,6 +273,29 @@ function StepRow({
     }
   }
 
+  /**
+   * A pasted image becomes this step's photo, replacing any it already has —
+   * the same outcome as pressing Replace. A step holds one photo, so if the
+   * clipboard carries several, the first is used.
+   *
+   * The paste box wraps only the photo, never the description, so pasting text
+   * into the markdown editor is untouched.
+   */
+  function onPaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    const [image] = imageFilesFromClipboard(event.clipboardData);
+    if (!image) {
+      toast.error(NO_CLIPBOARD_IMAGE);
+      return;
+    }
+
+    event.preventDefault();
+    if (isUploading) {
+      toast.error("Wait for the current upload to finish.");
+      return;
+    }
+    void onFileChosen(image);
+  }
+
   return (
     <li
       ref={setNodeRef}
@@ -334,6 +362,22 @@ function StepRow({
         onChange={(event) => onFileChosen(event.target.files?.[0])}
       />
 
+      {/*
+        The paste target. Only focusable once the recipe exists — before that
+        there is no folder to upload into, exactly as with the Add photo button.
+        Highlights on `focus` rather than `focus-visible` so a click shows it is
+        ready; see the gallery section in photo-manager.tsx.
+      */}
+      <div
+        tabIndex={recipeId ? 0 : undefined}
+        onPaste={recipeId ? onPaste : undefined}
+        aria-label={
+          recipeId
+            ? `Step ${stepNumber} photo. Click here and paste to add a copied image.`
+            : undefined
+        }
+        className="focus:border-ring focus:ring-ring/50 flex flex-col gap-2 rounded-md border border-dashed p-2 outline-none focus:ring-[3px]"
+      >
       {photoPath ? (
         <div className="flex items-end gap-2">
           <div className="bg-muted aspect-video w-40 overflow-hidden rounded-md border">
@@ -388,6 +432,14 @@ function StepRow({
           {isUploading ? "Uploading…" : "Add photo"}
         </Button>
       )}
+      {recipeId && (
+        <p className="text-muted-foreground text-xs">
+          {photoPath
+            ? "Or click this box and paste to replace it."
+            : "Or click this box and paste a copied image."}
+        </p>
+      )}
+      </div>
     </li>
   );
 }
