@@ -1,6 +1,16 @@
 import { z } from "zod";
 
 /**
+ * The exact shape of a photo's storage path: `{kitchen_id}/{recipe_id}/{uuid}.jpg`.
+ *
+ * Shared by gallery photos and step photos, because both live in the same
+ * bucket under the same storage policy, which authorises on the first segment.
+ * A path that does not match cannot be trusted to be in the right folder.
+ */
+export const PHOTO_PATH_PATTERN =
+  /^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/i;
+
+/**
  * Records a photo that the browser has already uploaded to Storage.
  *
  * The bytes never pass through a server action — they go from the browser
@@ -15,10 +25,7 @@ export const recordPhotoSchema = z.object({
   recipeId: z.uuid(),
   storagePath: z
     .string()
-    .regex(
-      /^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/i,
-      "That is not a valid photo path.",
-    ),
+    .regex(PHOTO_PATH_PATTERN, "That is not a valid photo path."),
 });
 
 export const photoIdSchema = z.object({

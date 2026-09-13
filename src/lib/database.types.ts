@@ -544,6 +544,57 @@ export type Database = {
           },
         ]
       }
+      recipe_steps: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          kitchen_id: string
+          photo_path: string | null
+          recipe_id: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          kitchen_id: string
+          photo_path?: string | null
+          recipe_id: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          kitchen_id?: string
+          photo_path?: string | null
+          recipe_id?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_steps_kitchen_id_fkey"
+            columns: ["kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "kitchens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_steps_recipe_id_kitchen_id_fkey"
+            columns: ["recipe_id", "kitchen_id"]
+            isOneToOne: false
+            referencedRelation: "recipes"
+            referencedColumns: ["id", "kitchen_id"]
+          },
+        ]
+      }
       recipe_tags: {
         Row: {
           kitchen_id: string

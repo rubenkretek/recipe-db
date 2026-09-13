@@ -7,7 +7,7 @@ import { Controller, useForm } from "react-hook-form";
 
 import type { IngredientOption } from "@/components/recipes/ingredient-combobox";
 import { IngredientEditor } from "@/components/recipes/ingredient-editor";
-import { MethodEditor } from "@/components/recipes/method-editor";
+import { StepEditor } from "@/components/recipes/step-editor";
 import { TagCombobox } from "@/components/recipes/tag-combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import type { RecipeDetail, RecipeTag } from "@/lib/recipes";
 import type { Supermarket } from "@/lib/supermarkets";
 import { UNITS } from "@/lib/units";
 import {
+  BLANK_STEP,
   MEAL_TYPES,
   recipeFormSchema,
   type RecipeFormInput,
@@ -75,12 +76,15 @@ export function RecipeForm({
   allIngredients,
   supermarkets,
   assignmentsByIngredient,
+  kitchenId,
   recipe,
 }: {
   allTags: RecipeTag[];
   allIngredients: IngredientOption[];
   supermarkets: Supermarket[];
   assignmentsByIngredient: Record<string, string[]>;
+  /** For step photo storage paths, whose first segment is the kitchen id. */
+  kitchenId: string;
   recipe?: RecipeDetail;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
@@ -99,8 +103,18 @@ export function RecipeForm({
       mealType: recipe?.mealType ?? "dinner",
       baseServings: recipe?.baseServings ?? 2,
       sourceUrl: recipe?.sourceUrl ?? "",
-      method: recipe?.method ?? "",
       notes: recipe?.notes ?? "",
+      // Always at least one step on screen, even for a new recipe or one saved
+      // without a method. It is a convention, not a rule: a blank step is
+      // dropped on save, so a name-only recipe still saves. SPEC.md §8 Phase 2.
+      steps:
+        recipe && recipe.steps.length > 0
+          ? recipe.steps.map((step) => ({
+              title: step.title,
+              description: step.description ?? "",
+              photoPath: step.photoPath,
+            }))
+          : [{ ...BLANK_STEP }],
       tagIds: recipe?.tags.map((tag) => tag.id) ?? [],
       // Quantities come back in base units and go straight back out that way
       // unless edited, so the editor shows the unit they were entered in.
@@ -218,14 +232,19 @@ export function RecipeForm({
 
       <div className="grid gap-2">
         <Label>Method</Label>
-        <Controller
+        <StepEditor
           control={control}
-          name="method"
-          render={({ field }) => (
-            <MethodEditor
-              value={field.value ?? ""}
-              onChange={field.onChange}
-            />
+          register={register}
+          setValue={setValue}
+          errors={errors}
+          kitchenId={kitchenId}
+          recipeId={recipe?.id ?? null}
+          photoUrls={Object.fromEntries(
+            (recipe?.steps ?? []).flatMap((step) =>
+              step.photoPath && step.photoUrl
+                ? [[step.photoPath, step.photoUrl]]
+                : [],
+            ),
           )}
         />
       </div>

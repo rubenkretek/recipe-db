@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { recipeIngredientSchema } from "@/schemas/ingredient";
+import { PHOTO_PATH_PATTERN } from "@/schemas/photo";
 
 /**
  * The meal types from SPEC.md §5.1, mirroring the `meal_type` Postgres enum.
@@ -38,6 +39,29 @@ const optionalText = z
   .transform((value) => (value === "" ? null : value))
   .nullable();
 
+/**
+ * One step of the method, as entered in the editor.
+ *
+ * The title is what makes it a step; the description is optional markdown, and
+ * the photo is a storage path the browser has already uploaded to — never the
+ * bytes themselves. See CLAUDE.md "Exception: file uploads".
+ *
+ * The title is allowed to be empty *here* only so that a wholly blank step can
+ * be recognised and dropped below. A step with anything else in it must have a
+ * title.
+ */
+const recipeStepSchema = z.object({
+  title: z.string().trim().max(200, "That step title is too long."),
+  description: optionalText,
+  photoPath: z
+    .string()
+    .regex(PHOTO_PATH_PATTERN, "That is not a valid photo path.")
+    .nullable(),
+});
+
+/** What the editor appends when the plus button is pressed. */
+export const BLANK_STEP = { title: "", description: "", photoPath: null };
+
 export const recipeFormSchema = z.object({
   name: z
     .string()
@@ -54,8 +78,39 @@ export const recipeFormSchema = z.object({
   // is provenance rather than something the app fetches. Phase 10 validates
   // properly at the point it actually loads the page.
   sourceUrl: optionalText,
-  method: optionalText,
   notes: optionalText,
+  /**
+   * The method, as ordered steps. The array index becomes `sort_order`.
+   *
+   * Wholly blank steps are dropped rather than rejected. The editor always
+   * starts with one empty step, and without this a recipe saved with only a
+   * name would fail — breaking SPEC.md §8 Phase 2's "a recipe can be created
+   * with a name only". A step with a description or photo but no title is an
+   * error, reported against the step so the author can find it.
+   */
+  steps: z
+    .array(recipeStepSchema)
+    .default([])
+    .superRefine((steps, context) => {
+      steps.forEach((step, index) => {
+        const hasContent = step.description !== null || step.photoPath !== null;
+        if (step.title === "" && hasContent) {
+          context.addIssue({
+            code: "custom",
+            path: [index, "title"],
+            message: `Give step ${index + 1} a title.`,
+          });
+        }
+      });
+    })
+    .transform((steps) =>
+      steps.filter(
+        (step) =>
+          step.title !== "" ||
+          step.description !== null ||
+          step.photoPath !== null,
+      ),
+    ),
   /** Tag ids already attached. Tag creation happens before submit. */
   tagIds: z.array(z.uuid()).default([]),
   /**
@@ -69,6 +124,7 @@ export const recipeFormSchema = z.object({
 
 export type RecipeFormInput = z.input<typeof recipeFormSchema>;
 export type RecipeFormValues = z.output<typeof recipeFormSchema>;
+export type RecipeStepValues = RecipeFormValues["steps"][number];
 
 export const createRecipeSchema = recipeFormSchema;
 

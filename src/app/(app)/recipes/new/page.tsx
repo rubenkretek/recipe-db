@@ -1,13 +1,15 @@
 import { RecipeForm } from "@/components/recipes/recipe-form";
 import { listIngredients } from "@/lib/ingredients";
+import { requireKitchenContext } from "@/lib/kitchen";
 import { listTags } from "@/lib/recipes";
 import { listSupermarkets } from "@/lib/supermarkets";
 
 export default async function NewRecipePage() {
-  const [allTags, ingredients, supermarkets] = await Promise.all([
+  const [allTags, ingredients, supermarkets, { active }] = await Promise.all([
     listTags(),
     listIngredients(),
     listSupermarkets(),
+    requireKitchenContext(),
   ]);
 
   const allIngredients = ingredients.map((ingredient) => ({
@@ -39,6 +41,7 @@ export default async function NewRecipePage() {
         allIngredients={allIngredients}
         supermarkets={supermarkets}
         assignmentsByIngredient={assignmentsByIngredient}
+        kitchenId={active.id}
       />
     </div>
   );

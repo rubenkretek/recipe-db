@@ -191,21 +191,27 @@ const TOOLBAR_ACTIONS: ToolbarAction[] = [
 ];
 
 /**
- * The method field: a markdown textarea with a formatting toolbar and a
- * preview. SPEC.md §8 Phase 2.
+ * A markdown textarea with a formatting toolbar and a preview.
+ *
+ * Built in Phase 2 for the single method field; since 2026-09-12 it edits each
+ * step's description instead, one instance per step, with `compact` keeping a
+ * list of several from becoming a wall of textareas.
  *
  * Still a plain textarea underneath rather than a rich-text editor, because the
- * method is stored as markdown (SPEC.md §9 decision 4) and pasting a method
- * straight off a website has to keep working. The toolbar exists so the
- * markdown is discoverable: nothing else on the page tells you that "##" makes
- * a heading.
+ * text is stored as markdown and pasting straight off a website has to keep
+ * working. The toolbar exists so the markdown is discoverable: nothing else on
+ * the page tells you that "##" makes a heading.
  */
 export function MethodEditor({
   value,
   onChange,
+  compact = false,
+  placeholder = "Heat the oven to 200C.\n\nMarkdown works here.",
 }: {
   value: string;
   onChange: (value: string) => void;
+  compact?: boolean;
+  placeholder?: string;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingSelection = useRef<CursorRange | null>(null);
@@ -288,14 +294,22 @@ export function MethodEditor({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          rows={14}
-          placeholder={"Heat the oven to 200C.\n\nMarkdown works here."}
-          className="min-h-64 font-mono text-sm"
+          rows={compact ? 4 : 14}
+          placeholder={placeholder}
+          className={
+            compact ? "min-h-24 font-mono text-sm" : "min-h-64 font-mono text-sm"
+          }
         />
       </TabsContent>
 
       <TabsContent value="preview">
-        <div className="min-h-64 rounded-md border p-3">
+        <div
+          className={
+            compact
+              ? "min-h-24 rounded-md border p-3"
+              : "min-h-64 rounded-md border p-3"
+          }
+        >
           {value.trim() ? (
             <Markdown>{value}</Markdown>
           ) : (

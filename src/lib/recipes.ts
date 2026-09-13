@@ -48,10 +48,26 @@ export type RecipeListItem = {
   coverUrl: string | null;
 };
 
+export type RecipeStep = {
+  id: string;
+  title: string;
+  /** Markdown. Null when the title says all there is to say. */
+  description: string | null;
+  /** Storage path of the step's photo, if it has one. */
+  photoPath: string | null;
+  /** Signed and short-lived. Null when there is no photo or it could not be signed. */
+  photoUrl: string | null;
+};
+
 export type RecipeDetail = RecipeListItem & {
   sourceUrl: string | null;
-  method: string | null;
   notes: string | null;
+  /**
+   * The method, in order. Replaced the single markdown `method` field on
+   * 2026-09-12; that column is kept but no longer read. Empty on the grid,
+   * which never shows the method — only `getRecipe` loads it.
+   */
+  steps: RecipeStep[];
   baseServings: number;
   /** Every photo, cover first. */
   photos: RecipePhoto[];
@@ -80,7 +96,7 @@ export type RecipeFilters = {
  */
 const RECIPE_SELECT = `
   id, name, meal_type, archived_at, created_at,
-  source_url, method, notes, base_servings,
+  source_url, notes, base_servings,
   recipe_tags ( tags ( id, name ) ),
   ratings ( user_id, score, profiles ( display_name ) ),
   recipe_photos ( id, storage_path, sort_order ),
@@ -97,7 +113,6 @@ type RecipeRow = {
   archived_at: string | null;
   created_at: string;
   source_url: string | null;
-  method: string | null;
   notes: string | null;
   base_servings: number;
   recipe_tags: { tags: { id: string; name: string } | null }[];
@@ -187,7 +202,7 @@ function toRecipeDetail(
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     sourceUrl: row.source_url,
-    method: row.method,
+    steps: [],
     notes: row.notes,
     baseServings: row.base_servings,
     tags: row.recipe_tags
@@ -338,7 +353,37 @@ export async function getRecipe(recipeId: string): Promise<RecipeDetail | null> 
   }
 
   const row = data as unknown as RecipeRow;
-  return toRecipeDetail(row, await signPhotosOf([row]));
+  const detail = toRecipeDetail(row, await signPhotosOf([row]));
+
+  // Loaded here rather than embedded in RECIPE_SELECT, which the grid shares:
+  // the grid never shows a method, and embedding every step of every recipe
+  // there would be pure payload.
+  const { data: stepRows, error: stepError } = await supabase
+    .from("recipe_steps")
+    .select("id, title, description, photo_path, sort_order")
+    .eq("kitchen_id", active.id)
+    .eq("recipe_id", recipeId)
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (stepError) {
+    throw new Error(`Could not load the method: ${stepError.message}`);
+  }
+
+  const photoPaths = (stepRows ?? [])
+    .map((step) => step.photo_path)
+    .filter((path): path is string => path !== null);
+  const stepPhotoUrls = await signedUrlsFor(photoPaths);
+
+  detail.steps = (stepRows ?? []).map((step) => ({
+    id: step.id,
+    title: step.title,
+    description: step.description,
+    photoPath: step.photo_path,
+    photoUrl: step.photo_path ? (stepPhotoUrls.get(step.photo_path) ?? null) : null,
+  }));
+
+  return detail;
 }
 
 /**

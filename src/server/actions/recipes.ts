@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { requireUserId } from "@/lib/auth";
 import { requireKitchenContext } from "@/lib/kitchen";
+import { PHOTO_BUCKET } from "@/lib/photos";
 import { toBase } from "@/lib/units";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -13,6 +14,7 @@ import {
   rateRecipeSchema,
   recipeIdSchema,
   updateRecipeSchema,
+  type RecipeStepValues,
 } from "@/schemas/recipe";
 import type { RecipeIngredientValues } from "@/schemas/ingredient";
 import type { ActionError } from "@/server/actions/auth";
@@ -123,6 +125,87 @@ async function replaceRecipeIngredients(
   return insertError?.message ?? null;
 }
 
+/**
+ * Replaces a recipe's method steps with exactly the list given.
+ *
+ * Delete-then-insert, the same shape as ingredients: the array index is the
+ * order, so reordering needs no bookkeeping.
+ *
+ * Every photo path is checked against this recipe's own folder. The storage
+ * policy already stops an upload landing in another kitchen, but a *row* could
+ * otherwise point at a path in a different recipe, or at somebody else's folder
+ * whose URL then gets signed on this page.
+ *
+ * Photos that a step held before this save and no step holds after it are
+ * removed from Storage — but only once the new steps are written, so a failed
+ * save never costs a photo. Removal is best effort for the same reason as
+ * `deletePhoto`: an orphaned file is invisible, a missing one is a broken image.
+ */
+async function replaceRecipeSteps(
+  recipeId: string,
+  kitchenId: string,
+  steps: RecipeStepValues[],
+): Promise<string | null> {
+  const folder = `${kitchenId}/${recipeId}/`;
+  if (
+    steps.some(
+      (step) => step.photoPath !== null && !step.photoPath.startsWith(folder),
+    )
+  ) {
+    return "A step photo does not belong to this recipe.";
+  }
+
+  const supabase = await createClient();
+
+  const { data: previous, error: readError } = await supabase
+    .from("recipe_steps")
+    .select("photo_path")
+    .eq("recipe_id", recipeId)
+    .eq("kitchen_id", kitchenId);
+
+  if (readError) {
+    return readError.message;
+  }
+
+  const { error: clearError } = await supabase
+    .from("recipe_steps")
+    .delete()
+    .eq("recipe_id", recipeId)
+    .eq("kitchen_id", kitchenId);
+
+  if (clearError) {
+    return clearError.message;
+  }
+
+  if (steps.length > 0) {
+    const { error: insertError } = await supabase.from("recipe_steps").insert(
+      steps.map((step, index) => ({
+        kitchen_id: kitchenId,
+        recipe_id: recipeId,
+        title: step.title,
+        description: step.description,
+        photo_path: step.photoPath,
+        sort_order: index,
+      })),
+    );
+
+    if (insertError) {
+      return insertError.message;
+    }
+  }
+
+  const kept = new Set(steps.map((step) => step.photoPath));
+  const orphaned = (previous ?? [])
+    .map((row) => row.photo_path)
+    .filter((path): path is string => path !== null && !kept.has(path));
+
+  if (orphaned.length > 0) {
+    await supabase.storage.from(PHOTO_BUCKET).remove(orphaned);
+  }
+
+  return null;
+}
+
 /** Creates a recipe and goes straight to it. Only the name is required. */
 export async function createRecipe(
   input: unknown,
@@ -145,7 +228,6 @@ export async function createRecipe(
       meal_type: parsed.data.mealType,
       base_servings: parsed.data.baseServings,
       source_url: parsed.data.sourceUrl,
-      method: parsed.data.method,
       notes: parsed.data.notes,
     })
     .select("id")
@@ -173,6 +255,17 @@ export async function createRecipe(
     return { error: ingredientError };
   }
 
+  // A brand new recipe cannot carry step photos — their folder is named after
+  // the id created just above — so the folder check rejects any a client sends.
+  const stepError = await replaceRecipeSteps(
+    data.id,
+    active.id,
+    parsed.data.steps,
+  );
+  if (stepError) {
+    return { error: stepError };
+  }
+
   revalidatePath("/recipes");
   redirect(`/recipes/${data.id}`);
 }
@@ -196,7 +289,6 @@ export async function updateRecipe(
       meal_type: parsed.data.mealType,
       base_servings: parsed.data.baseServings,
       source_url: parsed.data.sourceUrl,
-      method: parsed.data.method,
       notes: parsed.data.notes,
     })
     .eq("id", parsed.data.recipeId)
@@ -222,6 +314,15 @@ export async function updateRecipe(
   );
   if (ingredientError) {
     return { error: ingredientError };
+  }
+
+  const stepError = await replaceRecipeSteps(
+    parsed.data.recipeId,
+    active.id,
+    parsed.data.steps,
+  );
+  if (stepError) {
+    return { error: stepError };
   }
 
   revalidatePath("/recipes");

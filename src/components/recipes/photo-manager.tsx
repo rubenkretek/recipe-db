@@ -31,8 +31,11 @@ import {
  * specifically because it honours EXIF orientation. A canvas draw silently
  * discards it, which is why naive implementations turn every portrait phone
  * photo on its side.
+ *
+ * Exported for the step editor, which uploads step photos through exactly the
+ * same pipeline.
  */
-async function prepareForUpload(file: File): Promise<File> {
+export async function prepareForUpload(file: File): Promise<File> {
   return imageCompression(file, {
     maxWidthOrHeight: MAX_PHOTO_DIMENSION,
     initialQuality: PHOTO_QUALITY,

@@ -58,6 +58,7 @@ export default async function EditRecipePage({
         allIngredients={allIngredients}
         supermarkets={supermarkets}
         assignmentsByIngredient={assignmentsByIngredient}
+        kitchenId={active.id}
         recipe={recipe}
       />
     </div>

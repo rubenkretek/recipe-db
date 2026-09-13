@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AddToPlanButton } from "@/components/recipes/add-to-plan-button";
 import { ArchiveButton } from "@/components/recipes/archive-button";
 import { IngredientList } from "@/components/recipes/ingredient-list";
-import { Markdown } from "@/components/recipes/markdown";
+import { StepList } from "@/components/recipes/step-list";
 import { PhotoGallery } from "@/components/recipes/photo-gallery";
 import {
   RatingControl,
@@ -129,12 +129,12 @@ export default async function RecipePage({
         </>
       )}
 
-      {recipe.method && (
+      {recipe.steps.length > 0 && (
         <>
           <Separator />
-          <section className="flex flex-col gap-3">
+          <section className="flex flex-col gap-4">
             <h2 className="text-sm font-medium">Method</h2>
-            <Markdown>{recipe.method}</Markdown>
+            <StepList steps={recipe.steps} />
           </section>
         </>
       )}

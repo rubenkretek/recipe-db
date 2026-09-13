@@ -237,7 +237,7 @@ recipes (
   kitchen_id        uuid not null references kitchens(id) on delete cascade,
   name              text not null,
   source_url        text,                    -- provenance only, not the recipe itself
-  method            text,                    -- markdown
+  method            text,                    -- SUPERSEDED by recipe_steps (2026-09-12). Kept unread; do not write.
   notes             text,
   meal_type         meal_type not null default 'dinner',
   base_servings     int not null default 2 check (base_servings > 0),
@@ -251,6 +251,38 @@ recipes (
 )
 -- updated_at is maintained by the shared set_updated_at() trigger, created in
 -- Phase 1 and attached to recipes and ratings in Phase 2.
+
+-- The method, as ordered steps. Replaced the single markdown `method` field on
+-- 2026-09-12, reversing §9 decision 4. Each existing method was copied into one
+-- step titled "Method"; `recipes.method` stays as the undo until a later
+-- migration drops it.
+recipe_steps (
+  id          uuid primary key,
+  kitchen_id  uuid not null references kitchens(id) on delete cascade,
+  recipe_id   uuid not null,
+  title       text not null,            -- required; 1–200 chars after trimming
+  description text,                     -- optional markdown, same renderer as before
+  photo_path  text,                     -- optional, at most one per step
+  sort_order  int not null default 0,   -- the step number is the position, not stored
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  foreign key (recipe_id, kitchen_id)
+    references recipes (id, kitchen_id) on delete cascade
+)
+-- create index on recipe_steps (kitchen_id);
+-- create index on recipe_steps (recipe_id, sort_order);
+-- Also unique (id, kitchen_id), so anything that ever references a step can
+-- use the composite shape. updated_at uses the shared set_updated_at() trigger.
+--
+-- A recipe may have ZERO steps. §8 Phase 2 says a recipe can be created with a
+-- name only; the editor starts with one blank step as a convention, and blank
+-- steps are dropped on save.
+--
+-- photo_path is a column rather than a row in recipe_photos on purpose. Step
+-- photos in that table would make every cover query need a `step_id is null`
+-- filter, and missing one would promote a step photo to the recipe's cover. The
+-- path shape is the same {kitchen_id}/{recipe_id}/{uuid}.jpg, so the existing
+-- bucket and storage policies authorise it unchanged.
 
 recipe_photos (
   id           uuid primary key,
@@ -729,7 +761,7 @@ something is added — so steps 2 and 5 are conditional.
 | `/join/[code]` | Invite landing page. Redeems and redirects. |
 | `/` | Dashboard: current plan summary, shopping list count, quick actions. |
 | `/recipes` | Card grid. Search by name, filter by tag / meal type / rating / unreviewed, sort by name / average rating / recently added / least recently cooked. |
-| `/recipes/new`, `/recipes/[id]`, `/recipes/[id]/edit` | Recipe detail with servings stepper, photo gallery, ingredient list, markdown method, tag pills, meal-type pill, rating control per member, "Add to plan" button, "Mark reviewed" button. |
+| `/recipes/new`, `/recipes/[id]`, `/recipes/[id]/edit` | Recipe detail with servings stepper, photo gallery, ingredient list, numbered method steps (title, optional photo, optional markdown description), tag pills, meal-type pill, rating control per member, "Add to plan" button, "Mark reviewed" button. |
 | `/plan` | The active plan. Add recipes, adjust servings, reorder, mark cooked, **Add ingredients** per recipe, complete plan. |
 | `/plan/history`, `/plan/[id]` | Past plans, read-only, with a "copy to current plan" action. |
 | `/shopping` | Supermarket selector, item list, tick, add manual item, edit quantity, copy to clipboard, clear list. |
@@ -984,7 +1016,7 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 
 ### Phase 10 — AI import from URL
 
-**Scope:** A route handler taking a URL, fetching the page server-side, extracting the readable content, and calling the Anthropic API to return structured JSON: name, source URL, servings, meal type, suggested tags, method, and an ingredient array of `{quantity, unit, name, note}`. Quantities are converted to base units by the same `toBase` used everywhere else, so the model's output goes through one validated path. A review-and-confirm screen: nothing is written until the user accepts. Ingredient names are matched against existing kitchen ingredients and aliases, with unmatched ones flagged for create-or-link. Prefer JSON-LD `Recipe` schema when the page provides it, falling back to the model on raw text.
+**Scope:** A route handler taking a URL, fetching the page server-side, extracting the readable content, and calling the Anthropic API to return structured JSON: name, source URL, servings, meal type, suggested tags, method steps as an array of `{title, description}` (not a single method string — see `recipe_steps` in §5.4), and an ingredient array of `{quantity, unit, name, note}`. Quantities are converted to base units by the same `toBase` used everywhere else, so the model's output goes through one validated path. A review-and-confirm screen: nothing is written until the user accepts. Ingredient names are matched against existing kitchen ingredients and aliases, with unmatched ones flagged for create-or-link. Prefer JSON-LD `Recipe` schema when the page provides it, falling back to the model on raw text.
 
 **Acceptance:** three real recipe URLs from different sites import with correct ingredients and quantities after review; a URL that is not a recipe fails gracefully.
 
@@ -1011,7 +1043,7 @@ Confirm or override before Phase 1 starts.
 1. ~~**"Kitchen"** as the name for a shared workspace.~~ **Confirmed before Phase 1.**
 2. ~~**Invite by shareable code**, valid 7 days.~~ **Confirmed before Phase 1.** Implemented as 8 characters of Crockford base32 (no I, L, O or U), matched case-insensitively, reusable until it expires or is revoked, with only the newest live code shown per kitchen.
 3. **`display_unit` is kept**, so a recipe entered as `2 tbsp` still reads as `2 tbsp` rather than `30ml`. Dropping the column is one line of migration and slightly less code, at the cost of tablespoon recipes reading in millilitres.
-4. **Method is a single markdown field**, not a structured list of steps. Structured steps would enable a step-by-step cook mode later, at the cost of a fiddlier editor now.
+4. ~~**Method is a single markdown field**, not a structured list of steps.~~ **Reversed on 2026-09-12.** The method is now ordered steps, each with a required title, an optional photo and an optional markdown description, stored in `recipe_steps` (§5.4). The fiddlier editor was accepted: a step list reads better while cooking and is what a step-by-step cook mode would need. Steps save with the recipe form; step photos upload immediately, like the gallery. Existing methods were migrated into a single step each, and `recipes.method` is retained unread as the undo.
 5. **Photos: many per recipe**, first is the cover.
 6. **Ratings are visible to all kitchen members**, and the grid sorts by the average.
 7. **"Reviewed" is an explicit button** setting `last_reviewed_at`, with the review filter defaulting to "not reviewed since 1 January this year".
