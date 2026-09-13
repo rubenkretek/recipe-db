@@ -1,7 +1,7 @@
 # Recipe & Shopping List App — Specification
 
-**Version:** 0.2 (pre-build)
-**Status:** Draft for review
+**Version:** 0.3
+**Status:** In use. Phases 0–8 are built; everything else is an unscheduled future build (§8).
 
 > **Changes since 0.1:** All quantities are now stored in base units (grams, millilitres, or a count), with every conversion done client-side. The units lookup table has been removed from the database and is now a TypeScript constant. The shopping list is populated by an explicit button with a checkbox picker rather than syncing automatically from the plan; `shopping_list_item_sources` and `manual_quantity_base` have been removed as a result.
 
@@ -459,7 +459,8 @@ meal_plan_recipes (
 -- create index on meal_plan_recipes (recipe_id);
 -- §5.6 specified no indexes at all. The second is the plan screen's only query;
 -- the third answers "is this recipe already on the plan" for the Add button and
--- "when did we last cook this" for Phase 9. All added in Phase 6.
+-- "when did we last cook this" for the review future build (formerly Phase 9).
+-- All added in Phase 6.
 --
 -- Deliberately NO unique constraint on (meal_plan_id, recipe_id): cooking the
 -- same thing twice in one period is real, and Phase 7's added-ingredients table
@@ -756,7 +757,7 @@ something is added — so steps 2 and 5 are conditional.
 
 | Route | Purpose |
 |---|---|
-| `/login` | Supabase Auth, email and password. Signup captures a display name. Google OAuth deferred to Phase 12. |
+| `/login` | Supabase Auth, email and password. Signup captures a display name. Google OAuth deferred to the Polish future build. |
 | `/kitchens` | List your kitchens, create one, join one by code. Shown after login if you have zero or many. |
 | `/join/[code]` | Invite landing page. Redeems and redirects. |
 | `/` | Dashboard: current plan summary, shopping list count, quick actions. |
@@ -1006,7 +1007,31 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 
 ---
 
-### Phase 9 — Review mode and suggestions
+**Phase 8 is the last scheduled phase.** From here the app is in everyday use,
+and the builds below are ideas kept on file rather than a plan. None is started
+without an explicit request, and each still gets the usual scope-and-questions
+pass first. Decided on 2026-09-13.
+
+---
+
+## Future builds (unscheduled)
+
+Each keeps its former phase number in brackets, so older references in code
+comments and migrations ("until Phase 12", "the Phase 10 importer") still lead
+somewhere. They are listed in no particular order.
+
+### Scrapped: Notion import (formerly Phase 11)
+
+**Scrapped on 2026-09-13.** The Notion recipes are being entered by hand
+instead, deliberately: re-entering each one is the chance to clean it up, which a
+bulk import would have carried across untouched. The original scope was a
+one-off local Node script importing names, links, tags, ratings and reviewed
+status from a Notion CSV export, optionally seeded through the AI importer.
+Nothing was built.
+
+---
+
+### Future build: Review mode and suggestions (formerly Phase 9)
 
 **Scope:** `last_reviewed_at`. A dedicated review flow: a queue of recipes not reviewed since a chosen date, defaulting to 1 January of the current year, presented one at a time with adjust rating, edit tags, archive, and mark reviewed. Progress indicator. A "not cooked in a while" list derived from `meal_plan_recipes.cooked_at` across historical plans. A random picker with filters for meal type, tag and minimum rating.
 
@@ -1014,7 +1039,7 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 
 ---
 
-### Phase 10 — AI import from URL
+### Future build: AI import from URL (formerly Phase 10)
 
 **Scope:** A route handler taking a URL, fetching the page server-side, extracting the readable content, and calling the Anthropic API to return structured JSON: name, source URL, servings, meal type, suggested tags, method steps as an array of `{title, description}` (not a single method string — see `recipe_steps` in §5.4), and an ingredient array of `{quantity, unit, name, note}`. Quantities are converted to base units by the same `toBase` used everywhere else, so the model's output goes through one validated path. A review-and-confirm screen: nothing is written until the user accepts. Ingredient names are matched against existing kitchen ingredients and aliases, with unmatched ones flagged for create-or-link. Prefer JSON-LD `Recipe` schema when the page provides it, falling back to the model on raw text.
 
@@ -1022,15 +1047,7 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 
 ---
 
-### Phase 11 — Notion import
-
-**Scope:** A one-off Node script, not a UI feature, run locally against a Notion CSV export. Maps name, link, tags, rating (assigned to a chosen user ID) and reviewed status. Ingredients and method are left empty for later backfill, optionally seeded by running each `source_url` through the Phase 10 importer. Idempotent: safe to run twice without duplicating.
-
-**Acceptance:** a dry-run mode prints what would be created; a real run imports the full database into a chosen kitchen.
-
----
-
-### Phase 12 — Polish
+### Future build: Polish (formerly Phase 12)
 
 Google OAuth as a second sign-in method, plus real SMTP so email confirmation and password reset can be turned on. Plan templates: save a completed plan as a reusable template, per your idea about predefined weeks. Ingredient categories and aisle-order sorting within a supermarket. A staples list for one-tap common items. Stats: most cooked, highest rated, never cooked. Live presence on the shopping screen. Empty states, loading skeletons, keyboard shortcuts.
 
@@ -1048,7 +1065,7 @@ Confirm or override before Phase 1 starts.
 6. **Ratings are visible to all kitchen members**, and the grid sorts by the average.
 7. **"Reviewed" is an explicit button** setting `last_reviewed_at`, with the review filter defaulting to "not reviewed since 1 January this year".
 8. **Removing a recipe from the plan leaves its ingredients on the shopping list**, with a toast explaining that.
-9. **Phase order.** Phase 10 could be pulled forward to right after Phase 5 if backfilling ingredients manually turns out to be the thing that stalls adoption.
+9. ~~**Phase order.** Phase 10 could be pulled forward to right after Phase 5 if backfilling ingredients manually turns out to be the thing that stalls adoption.~~ **Resolved on 2026-09-13.** Phases 0–8 were built in order. Phase 11 (Notion import) was scrapped in favour of entering recipes by hand to clean them up, and Phases 9, 10 and 12 became unscheduled future builds (§8). If manual entry turns out to stall, the AI import future build is the fallback.
 
 **Resolved in 0.2:** quantities are stored in base units with all conversion client-side; the shopping list is populated by an explicit button and checkbox picker.
 
@@ -1083,9 +1100,9 @@ Confirm or override before Phase 1 starts.
 
 | Risk | Mitigation |
 |---|---|
-| Backfilling ingredients for an existing library is tedious and stalls the project. | Phases 1 to 3 give value without ingredients at all. Pull Phase 10 forward if needed. |
+| Entering the Notion library by hand is tedious and stalls adoption. | Chosen deliberately, as a clean-up pass (§8, scrapped Notion import). Recipes are useful with just a name, so the library can fill gradually; the AI import future build is the fallback if it stalls. |
 | Base-unit storage makes recipes read oddly (`30ml` instead of `2 tbsp`). | `display_unit`, decision 3 above. |
 | Adding ingredients twice silently doubles a quantity. | Already-added ingredients default to unticked and grey in the picker, and the plan row shows an added count. |
 | Offline sync is the classic source of subtle bugs. | Keep the offline surface to one table and one operation, toggling checked. Everything else requires a connection. |
 | RLS recursion or gaps as tables multiply. | One helper function, one policy shape, `kitchen_id` on every table, and a manual cross-kitchen check at the end of each phase. |
-| Scope creep from the deliberately flexible non-goals list. | Anything in §2 requires an explicit decision to move it into a phase. |
+| Scope creep from the deliberately flexible non-goals list. | Anything in §2 requires an explicit decision to move it into a future build. |
