@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { withHeadings } from "@/lib/ingredient-groups";
+import { BLANK_INGREDIENT_ROW } from "@/schemas/ingredient";
 import type { RecipeDetail, RecipeTag } from "@/lib/recipes";
 import type { Supermarket } from "@/lib/supermarkets";
 import { UNITS } from "@/lib/units";
@@ -28,7 +30,6 @@ import {
   MEAL_TYPES,
   recipeFormSchema,
   type RecipeFormInput,
-  type RecipeFormValues,
 } from "@/schemas/recipe";
 import { createRecipe, updateRecipe } from "@/server/actions/recipes";
 
@@ -96,8 +97,14 @@ export function RecipeForm({
     control,
     setValue,
     formState: { errors },
-  } = useForm<RecipeFormInput, unknown, RecipeFormValues>({
-    resolver: zodResolver(recipeFormSchema),
+  } = useForm<RecipeFormInput, unknown, RecipeFormInput>({
+    // `raw: true` is required, not a preference. The form still validates here,
+    // but submits the values AS ENTERED, and the server action validates them
+    // once. Without it, handleSubmit receives the schema's transformed OUTPUT —
+    // ingredient heading rows already turned into grouped lines with no `kind` —
+    // and the server's second parse of that output rejects every recipe with an
+    // ingredient: "Invalid option: expected one of ingredient|heading".
+    resolver: zodResolver(recipeFormSchema, undefined, { raw: true }),
     defaultValues: {
       name: recipe?.name ?? "",
       mealType: recipe?.mealType ?? "dinner",
@@ -118,17 +125,24 @@ export function RecipeForm({
       tagIds: recipe?.tags.map((tag) => tag.id) ?? [],
       // Quantities come back in base units and go straight back out that way
       // unless edited, so the editor shows the unit they were entered in.
-      ingredients:
-        recipe?.ingredients.map((ingredient) => ({
-          ingredientId: ingredient.ingredientId,
-          quantity: displayableQuantity(ingredient),
-          unit: ingredient.displayUnit ?? ingredient.unit,
-          note: ingredient.note,
-        })) ?? [],
+      //
+      // Stored lines carry a group name; the editor shows a heading row wherever
+      // a group starts instead.
+      ingredients: withHeadings(recipe?.ingredients ?? []).map((entry) =>
+        entry.kind === "heading"
+          ? { ...BLANK_INGREDIENT_ROW, kind: "heading" as const, heading: entry.heading }
+          : {
+              ...BLANK_INGREDIENT_ROW,
+              ingredientId: entry.line.ingredientId,
+              quantity: displayableQuantity(entry.line),
+              unit: entry.line.displayUnit ?? entry.line.unit,
+              note: entry.line.note,
+            },
+      ),
     },
   });
 
-  function onSubmit(values: RecipeFormValues) {
+  function onSubmit(values: RecipeFormInput) {
     setFormError(null);
     startTransition(async () => {
       const result = recipe

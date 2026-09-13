@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, X } from "lucide-react";
+import { GripVertical, Heading, Plus, X } from "lucide-react";
 import { useState } from "react";
 import {
   Controller,
@@ -47,7 +47,8 @@ import {
 } from "@/components/ui/select";
 import type { Supermarket } from "@/lib/supermarkets";
 import { UNITS, type Dimension } from "@/lib/units";
-import type { RecipeFormInput, RecipeFormValues } from "@/schemas/recipe";
+import { BLANK_INGREDIENT_ROW } from "@/schemas/ingredient";
+import type { RecipeFormInput } from "@/schemas/recipe";
 
 /** The unit picker, grouped so weights, volumes and counts are distinguishable. */
 const UNIT_GROUPS: { label: string; dimension: Dimension }[] = [
@@ -71,6 +72,11 @@ function unitsFor(dimension: Dimension): string[] {
  * Quantities are entered in whatever unit suits — 1 kg, 2 tbsp — and converted
  * to base units server-side. Leaving the quantity blank means "to taste", which
  * stores null for both quantity and unit. SPEC.md §5.3.
+ *
+ * Headings ("Salad", "Dressing") are rows in the same list. An ingredient
+ * belongs to the nearest heading above it, so dragging it past a heading moves
+ * it into that group, and dragging a heading moves only the heading — keeping it
+ * one flat sortable list rather than nested ones.
  */
 export function IngredientEditor({
   control,
@@ -80,7 +86,7 @@ export function IngredientEditor({
   supermarkets,
   assignmentsByIngredient,
 }: {
-  control: Control<RecipeFormInput, unknown, RecipeFormValues>;
+  control: Control<RecipeFormInput, unknown, RecipeFormInput>;
   register: UseFormRegister<RecipeFormInput>;
   setValue: UseFormSetValue<RecipeFormInput>;
   allIngredients: IngredientOption[];
@@ -149,44 +155,121 @@ export function IngredientEditor({
             strategy={verticalListSortingStrategy}
           >
             <ul className="flex flex-col gap-2">
-              {fields.map((field, index) => (
-                <IngredientRow
-                  key={field.id}
-                  id={field.id}
-                  index={index}
-                  control={control}
-                  register={register}
-                  setValue={setValue}
-                  options={options}
-                  onOptionCreated={rememberOption}
-                  supermarkets={supermarkets}
-                  assignmentsByIngredient={assignmentsByIngredient}
-                  onRemove={() => remove(index)}
-                />
-              ))}
+              {fields.map((field, index) =>
+                field.kind === "heading" ? (
+                  <HeadingRow
+                    key={field.id}
+                    id={field.id}
+                    index={index}
+                    register={register}
+                    onRemove={() => remove(index)}
+                  />
+                ) : (
+                  <IngredientRow
+                    key={field.id}
+                    id={field.id}
+                    index={index}
+                    control={control}
+                    register={register}
+                    setValue={setValue}
+                    options={options}
+                    onOptionCreated={rememberOption}
+                    supermarkets={supermarkets}
+                    assignmentsByIngredient={assignmentsByIngredient}
+                    onRemove={() => remove(index)}
+                  />
+                ),
+              )}
             </ul>
           </SortableContext>
         </DndContext>
       )}
 
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => append({ ...BLANK_INGREDIENT_ROW })}
+        >
+          <Plus className="size-4" />
+          Add ingredient
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            append({ ...BLANK_INGREDIENT_ROW, kind: "heading" })
+          }
+        >
+          <Heading className="size-4" />
+          Add heading
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A heading within the ingredient list, e.g. "Dressing".
+ *
+ * Everything below it, down to the next heading, is in its group. A heading left
+ * blank is ignored on save, and one with nothing under it is dropped — there is
+ * no line to store it on.
+ */
+function HeadingRow({
+  id,
+  index,
+  register,
+  onRemove,
+}: {
+  id: string;
+  index: number;
+  register: UseFormRegister<RecipeFormInput>;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={
+        isDragging
+          ? "bg-background relative z-10 mt-2 flex items-center gap-2 rounded-md border-b-2 p-2 shadow-lg"
+          : "mt-2 flex items-center gap-2 border-b-2 p-2 first:mt-0"
+      }
+    >
+      <button
+        type="button"
+        className="text-muted-foreground hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
+        aria-label="Reorder heading"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-4" />
+      </button>
+
+      <Input
+        placeholder="Heading, e.g. Dressing"
+        aria-label="Ingredient group heading"
+        className="font-semibold"
+        {...register(`ingredients.${index}.heading`)}
+      />
+
       <Button
         type="button"
-        variant="secondary"
-        size="sm"
-        className="self-start"
-        onClick={() =>
-          append({
-            ingredientId: "",
-            quantity: null,
-            unit: null,
-            note: null,
-          })
-        }
+        variant="ghost"
+        size="icon"
+        className="text-destructive size-8 shrink-0"
+        aria-label="Remove heading"
+        onClick={onRemove}
       >
-        <Plus className="size-4" />
-        Add ingredient
+        <X className="size-4" />
       </Button>
-    </div>
+    </li>
   );
 }
 
@@ -204,7 +287,7 @@ function IngredientRow({
 }: {
   id: string;
   index: number;
-  control: Control<RecipeFormInput, unknown, RecipeFormValues>;
+  control: Control<RecipeFormInput, unknown, RecipeFormInput>;
   register: UseFormRegister<RecipeFormInput>;
   setValue: UseFormSetValue<RecipeFormInput>;
   options: IngredientOption[];

@@ -109,6 +109,9 @@ async function replaceRecipeIngredients(
         // remember. Keeping it null here matches the check constraint.
         display_unit: quantity === null ? null : ingredient.unit,
         note: ingredient.note,
+        // The heading this line sits under; a group is a consecutive run of
+        // lines sharing it, so `sort_order` is what keeps a group together.
+        group_name: ingredient.groupName,
         sort_order: index,
       };
     });

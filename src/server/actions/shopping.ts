@@ -6,13 +6,14 @@ import { requireUserId } from "@/lib/auth";
 import { requireKitchenContext } from "@/lib/kitchen";
 import { scaleQuantityForShopping } from "@/lib/servings";
 import {
+  combineRecipeLines,
   incrementedQuantity,
   planShoppingListAdditions,
   type ExistingItem,
   type MergeCandidate,
 } from "@/lib/shopping-merge";
 import { createClient } from "@/lib/supabase/server";
-import { toBase } from "@/lib/units";
+import { canMerge, toBase } from "@/lib/units";
 import {
   addIngredientsSchema,
   addManualItemSchema,
@@ -114,7 +115,7 @@ export async function addIngredientsToList(
     .from("meal_plan_recipes")
     .select(
       `id, servings,
-       recipes ( base_servings, recipe_ingredients ( ingredient_id, quantity, unit ) )`,
+       recipes ( base_servings, recipe_ingredients ( ingredient_id, quantity, unit, group_name ) )`,
     )
     .eq("kitchen_id", active.id)
     .in("id", plannedRecipeIds);
@@ -223,17 +224,28 @@ export async function addIngredientsToList(
   }
 
   // Step 5 of §6.3. `upsert` because the same pair can legitimately be sent
-  // twice — adding an already-added ingredient again is allowed.
-  const { error: recordError } = await supabase
-    .from("meal_plan_recipe_added_ingredients")
-    .upsert(
-      parsed.data.selections.map((one) => ({
+  // again later — adding an already-added ingredient again is allowed.
+  //
+  // Recorded per ingredient, not per unit or per recipe line: line ids are
+  // replaced on every recipe save, so anything keyed to them would be wiped by
+  // an edit. The pairs are deduplicated first, because one ingredient ticked in
+  // two units is two selections with the same pair, and Postgres refuses an
+  // upsert that touches the same row twice in one statement.
+  const addedPairs = new Map(
+    parsed.data.selections.map((one) => [
+      `${one.plannedRecipeId}:${one.ingredientId}`,
+      {
         kitchen_id: active.id,
         meal_plan_recipe_id: one.plannedRecipeId,
         ingredient_id: one.ingredientId,
-      })),
-      { onConflict: "meal_plan_recipe_id,ingredient_id" },
-    );
+      },
+    ]),
+  );
+  const { error: recordError } = await supabase
+    .from("meal_plan_recipe_added_ingredients")
+    .upsert([...addedPairs.values()], {
+      onConflict: "meal_plan_recipe_id,ingredient_id",
+    });
 
   if (recordError) {
     return { error: recordError.message };
@@ -252,6 +264,7 @@ type PlannedRecipeRow = {
       ingredient_id: string;
       quantity: number | null;
       unit: string | null;
+      group_name: string | null;
     }[];
   } | null;
 };
@@ -265,11 +278,42 @@ type PlannedRecipeRow = {
  */
 async function buildCandidates(
   kitchenId: string,
-  selections: { plannedRecipeId: string; ingredientId: string }[],
+  rawSelections: {
+    plannedRecipeId: string;
+    ingredientId: string;
+    unit: string | null;
+  }[],
   planned: PlannedRecipeRow[],
 ): Promise<MergeCandidate[]> {
   const supabase = await createClient();
   const byPlannedId = new Map(planned.map((row) => [row.id, row]));
+
+  // One candidate per picker row. A request repeating a selection must not
+  // double its quantity.
+  const selections = [
+    ...new Map(
+      rawSelections.map((one) => [
+        `${one.plannedRecipeId}:${one.ingredientId}:${one.unit ?? ""}`,
+        one,
+      ]),
+    ).values(),
+  ];
+
+  // Each planned recipe's lines, with repeats of one ingredient in one unit
+  // already summed — the same rows the picker showed. See `combineRecipeLines`.
+  const combinedByPlannedId = new Map(
+    planned.map((row) => [
+      row.id,
+      combineRecipeLines(
+        (row.recipes?.recipe_ingredients ?? []).map((line) => ({
+          ingredientId: line.ingredient_id,
+          quantity: line.quantity === null ? null : Number(line.quantity),
+          unit: line.unit,
+          groupName: line.group_name,
+        })),
+      ),
+    ]),
+  );
 
   const ingredientIds = [...new Set(selections.map((one) => one.ingredientId))];
 
@@ -290,9 +334,13 @@ async function buildCandidates(
 
   for (const selection of selections) {
     const plannedRecipe = byPlannedId.get(selection.plannedRecipeId);
-    const line = plannedRecipe?.recipes?.recipe_ingredients.find(
-      (row) => row.ingredient_id === selection.ingredientId,
-    );
+    const line = combinedByPlannedId
+      .get(selection.plannedRecipeId)
+      ?.find(
+        (row) =>
+          row.ingredientId === selection.ingredientId &&
+          canMerge(row.unit, selection.unit),
+      );
 
     // A selection naming an ingredient the recipe does not have is silently
     // dropped rather than guessed at.
@@ -303,7 +351,7 @@ async function buildCandidates(
     candidates.push({
       ingredientId: selection.ingredientId,
       quantity: scaleQuantityForShopping(
-        line.quantity === null ? null : Number(line.quantity),
+        line.quantity,
         line.unit,
         plannedRecipe.recipes?.base_servings ?? 1,
         plannedRecipe.servings,

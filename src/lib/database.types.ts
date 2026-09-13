@@ -447,6 +447,7 @@ export type Database = {
       recipe_ingredients: {
         Row: {
           display_unit: string | null
+          group_name: string | null
           id: string
           ingredient_id: string
           kitchen_id: string
@@ -458,6 +459,7 @@ export type Database = {
         }
         Insert: {
           display_unit?: string | null
+          group_name?: string | null
           id?: string
           ingredient_id: string
           kitchen_id: string
@@ -469,6 +471,7 @@ export type Database = {
         }
         Update: {
           display_unit?: string | null
+          group_name?: string | null
           id?: string
           ingredient_id?: string
           kitchen_id?: string

@@ -4,6 +4,7 @@ import { Minus, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { consecutiveGroups } from "@/lib/ingredient-groups";
 import type { RecipeIngredient } from "@/lib/recipes";
 import { scaleQuantity } from "@/lib/servings";
 import { formatQuantity, pluraliseName } from "@/lib/units";
@@ -68,13 +69,24 @@ export function IngredientList({
         </div>
       </div>
 
-      <ul className="flex flex-col gap-1.5 text-sm">
-        {ingredients.map((ingredient) => (
-          <li key={ingredient.id} className="flex gap-2">
-            <span>{renderIngredient(ingredient, baseServings, servings)}</span>
-          </li>
+      {/* Grouped under their headings ("Salad", "Dressing"). Ungrouped lines
+          have no heading and come first. */}
+      <div className="flex flex-col gap-4">
+        {consecutiveGroups(ingredients).map((group, index) => (
+          <div key={`${group.groupName ?? ""}-${index}`} className="flex flex-col gap-1.5">
+            {group.groupName && (
+              <h3 className="text-sm font-semibold">{group.groupName}</h3>
+            )}
+            <ul className="flex flex-col gap-1.5 text-sm">
+              {group.lines.map((ingredient) => (
+                <li key={ingredient.id} className="flex gap-2">
+                  <span>{renderIngredient(ingredient, baseServings, servings)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
-      </ul>
+      </div>
 
       {servings !== baseServings && (
         <p className="text-muted-foreground text-xs">

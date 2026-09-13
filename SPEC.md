@@ -400,6 +400,10 @@ recipe_ingredients (
   unit          text,                    -- 'g' | 'ml' | count unit. null when quantity is null.
   display_unit  text,                    -- optional hint, see 5.3
   note          text,                    -- 'finely chopped', 'plus extra to serve'
+  -- The heading this line sits under ("Salad", "Dressing"). Null = ungrouped.
+  -- A group is a CONSECUTIVE run of lines in sort_order sharing a name; there is
+  -- no groups table. 1–80 chars. Added 2026-09-13.
+  group_name    text,
   sort_order    int not null default 0,
   -- "null when quantity is null" made enforceable. Phase 4.
   check ((quantity is null and unit is null)
@@ -410,6 +414,14 @@ recipe_ingredients (
 -- The second answers "which recipes use this ingredient", which renaming,
 -- merging and the manager's usage count all need and no primary key serves.
 -- The kitchen_id foreign key and both indexes were added in Phase 4.
+--
+-- Ingredient groups are stored per line rather than as their own table because
+-- nothing outside a recipe refers to a group, and a recipe's lines are
+-- rewritten wholesale on every save, so renaming a heading is free. The editor
+-- shows headings as rows in the one sortable list: an ingredient belongs to the
+-- nearest heading above it, dragging a heading moves only the heading, and a
+-- heading with nothing under it is dropped on save because there is no line to
+-- store it on. Ungrouped lines render first. The shopping list ignores groups.
 --
 -- `on delete restrict` on ingredient_id means an ingredient in use cannot be
 -- deleted at all. That is deliberate: there is no delete in the ingredient
@@ -700,6 +712,17 @@ picker adding two onions from one recipe and three from another produces one
 The picker sends only identifiers. Quantities are recomputed server-side from the
 recipe and the planned servings, so a tampered request cannot state its own
 amount and all scaling goes through one path.
+
+**A recipe that needs one ingredient more than once gets one picker row for it.**
+Vinegar in the pickles and again in the dressing is summed into a single row per
+ingredient *and unit* (`combineRecipeLines`), captioned with the groups it came
+from — the list buys it once. Different units stay separate rows. Lines are
+summed before scaling, so counts round up once rather than per line. A selection
+is therefore identified by planned recipe, ingredient and unit. Recording in
+`meal_plan_recipe_added_ingredients` stays per ingredient, because recipe line
+ids are replaced on every save. Fixed on 2026-09-13: previously the server took
+only the first matching line, silently dropping every repeat's quantity, and the
+picker's repeated rows shared a key and ticked together.
 
 **The picker.** Each recipe on the plan has an **Add ingredients** button. Pressing it opens a sheet listing every ingredient of that recipe, with quantities already scaled to the planned servings.
 

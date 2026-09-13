@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { groupNamesForRows } from "@/lib/ingredient-groups";
 import { INPUT_UNITS } from "@/lib/units";
 
 /**
@@ -48,7 +49,16 @@ export const mergeIngredientsSchema = z
   });
 
 /**
- * One line of a recipe's ingredient list, as the form holds it.
+ * One row of the recipe form's ingredient list: an ingredient, or a heading.
+ *
+ * Headings are rows in the editor so the list stays a single sortable list — an
+ * ingredient belongs to the nearest heading above it, and dragging it past a
+ * heading moves it into that group. In the database there are no heading rows:
+ * the transform on `recipeIngredientRowsSchema` turns each heading into the
+ * `group_name` of the lines below it.
+ *
+ * Every row carries every field so the form has one shape; a heading row simply
+ * ignores the ingredient fields, and an ingredient row ignores `heading`.
  *
  * `quantity` and `unit` are entered in whatever unit suits — `1` and `kg` — and
  * converted to base units by `toBase()` in the server action. The database only
@@ -57,8 +67,11 @@ export const mergeIngredientsSchema = z
  * An empty quantity means "to taste": both the quantity and the unit end up
  * null, which is what the check constraint on `recipe_ingredients` requires.
  */
-export const recipeIngredientSchema = z.object({
-  ingredientId: z.uuid("Pick an ingredient."),
+const recipeIngredientRowSchema = z.object({
+  kind: z.enum(["ingredient", "heading"]),
+  heading: z.string().trim().max(80, "That heading is too long."),
+  // Checked per kind below: a heading row has no ingredient.
+  ingredientId: z.string(),
   quantity: z
     .union([z.number(), z.nan()])
     .nullable()
@@ -77,7 +90,58 @@ export const recipeIngredientSchema = z.object({
     .nullable(),
 });
 
-export type RecipeIngredientInput = z.input<typeof recipeIngredientSchema>;
-export type RecipeIngredientValues = z.output<typeof recipeIngredientSchema>;
+/** What an editor row looks like before anything is filled in. */
+export const BLANK_INGREDIENT_ROW = {
+  kind: "ingredient" as const,
+  heading: "",
+  ingredientId: "",
+  quantity: null,
+  unit: null,
+  note: null,
+};
+
+/**
+ * The whole ingredient list as the form holds it, and the lines it saves as.
+ *
+ * Output is the stored shape: ingredient lines only, each with the `groupName`
+ * of the heading above it. Heading rows disappear, and so does any heading with
+ * no ingredients under it — there is nothing to store it on. SPEC.md §5.5.
+ */
+export const recipeIngredientRowsSchema = z
+  .array(recipeIngredientRowSchema)
+  .default([])
+  .superRefine((rows, context) => {
+    rows.forEach((row, index) => {
+      if (row.kind === "ingredient" && !z.uuid().safeParse(row.ingredientId).success) {
+        context.addIssue({
+          code: "custom",
+          path: [index, "ingredientId"],
+          message: "Pick an ingredient.",
+        });
+      }
+    });
+  })
+  .transform((rows) => {
+    const groupNames = groupNamesForRows(rows);
+
+    return rows.flatMap((row, index) =>
+      row.kind === "heading"
+        ? []
+        : [
+            {
+              ingredientId: row.ingredientId,
+              quantity: row.quantity,
+              unit: row.unit,
+              note: row.note,
+              groupName: groupNames[index],
+            },
+          ],
+    );
+  });
+
+export type RecipeIngredientRowInput = z.input<typeof recipeIngredientRowSchema>;
+export type RecipeIngredientValues = z.output<
+  typeof recipeIngredientRowsSchema
+>[number];
 export type RenameIngredientInput = z.infer<typeof renameIngredientSchema>;
 export type MergeIngredientsInput = z.infer<typeof mergeIngredientsSchema>;

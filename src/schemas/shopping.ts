@@ -16,6 +16,10 @@ export const addIngredientsSchema = z.object({
       z.object({
         plannedRecipeId: z.uuid(),
         ingredientId: z.uuid(),
+        // Part of the identity: the same ingredient in two units is two picker
+        // rows and two list lines. Only matched against the recipe's own lines,
+        // so a made-up unit simply matches nothing.
+        unit: z.string().max(20).nullable(),
       }),
     )
     .min(1, "Nothing was ticked."),

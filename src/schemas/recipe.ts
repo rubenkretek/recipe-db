@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { recipeIngredientSchema } from "@/schemas/ingredient";
+import { recipeIngredientRowsSchema } from "@/schemas/ingredient";
 import { PHOTO_PATH_PATTERN } from "@/schemas/photo";
 
 /**
@@ -119,7 +119,10 @@ export const recipeFormSchema = z.object({
    * Quantities arrive in whatever unit was picked and are converted to base
    * units server-side. SPEC.md §5.3.
    */
-  ingredients: z.array(recipeIngredientSchema).default([]),
+  //
+  // Held as rows that may be headings ("Salad", "Dressing"); saved as lines that
+  // each carry the heading above them. See `recipeIngredientRowsSchema`.
+  ingredients: recipeIngredientRowsSchema,
 });
 
 export type RecipeFormInput = z.input<typeof recipeFormSchema>;

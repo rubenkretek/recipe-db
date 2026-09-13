@@ -26,6 +26,8 @@ export type RecipeIngredient = {
   /** How it was entered, so a tablespoon recipe still reads in tablespoons. */
   displayUnit: string | null;
   note: string | null;
+  /** The heading this line sits under, e.g. "Dressing". Null when ungrouped. */
+  groupName: string | null;
 };
 
 export type RecipeRating = {
@@ -101,7 +103,7 @@ const RECIPE_SELECT = `
   ratings ( user_id, score, profiles ( display_name ) ),
   recipe_photos ( id, storage_path, sort_order ),
   recipe_ingredients (
-    id, ingredient_id, quantity, unit, display_unit, note, sort_order,
+    id, ingredient_id, quantity, unit, display_unit, note, group_name, sort_order,
     ingredients ( name )
   )
 `;
@@ -133,6 +135,7 @@ type RecipeRow = {
     unit: string | null;
     display_unit: string | null;
     note: string | null;
+    group_name: string | null;
     sort_order: number;
     ingredients: { name: string } | null;
   }[];
@@ -193,6 +196,7 @@ function toRecipeDetail(
       unit: row.unit,
       displayUnit: row.display_unit,
       note: row.note,
+      groupName: row.group_name,
     }));
 
   return {

@@ -31,9 +31,18 @@ import { addIngredientsToList } from "@/server/actions/shopping";
  */
 type PickerMode = "recipe" | "plan";
 
-/** A selection is one ingredient of one planned recipe. */
-function keyFor(plannedRecipeId: string, ingredientId: string): string {
-  return `${plannedRecipeId}:${ingredientId}`;
+/**
+ * A selection is one ingredient, in one unit, of one planned recipe.
+ *
+ * The unit is part of it because the same ingredient in two units is two rows —
+ * without it, both rows shared a key and ticked together. `|` cannot appear in a
+ * uuid or a unit code, so the key splits back apart safely.
+ */
+function keyFor(
+  plannedRecipeId: string,
+  ingredient: { ingredientId: string; unit: string | null },
+): string {
+  return `${plannedRecipeId}|${ingredient.ingredientId}|${ingredient.unit ?? ""}`;
 }
 
 /**
@@ -81,8 +90,8 @@ export function IngredientPicker({
 
   function confirm() {
     const selections = [...ticked].map((key) => {
-      const [plannedRecipeId, ingredientId] = key.split(":");
-      return { plannedRecipeId, ingredientId };
+      const [plannedRecipeId, ingredientId, unit] = key.split("|");
+      return { plannedRecipeId, ingredientId, unit: unit === "" ? null : unit };
     });
 
     startTransition(async () => {
@@ -138,10 +147,7 @@ export function IngredientPicker({
 
                 <ul className="flex flex-col gap-1.5">
                   {section.ingredients.map((ingredient) => {
-                    const key = keyFor(
-                      section.recipe.id,
-                      ingredient.ingredientId,
-                    );
+                    const key = keyFor(section.recipe.id, ingredient);
                     return (
                       <IngredientRow
                         key={key}
@@ -193,7 +199,7 @@ function initialTicked(
   for (const section of sections) {
     for (const ingredient of section.ingredients) {
       if (!ingredient.alreadyAdded) {
-        ticked.add(keyFor(section.recipe.id, ingredient.ingredientId));
+        ticked.add(keyFor(section.recipe.id, ingredient));
       }
     }
   }
@@ -237,8 +243,17 @@ function IngredientRow({
             : "text-muted-foreground flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm"
         }
       >
-        <span className={isTicked ? "" : "line-through"}>
-          {quantity ? `${quantity} ${name}` : name}
+        <span className="flex min-w-0 flex-col">
+          <span className={isTicked ? "" : "line-through"}>
+            {quantity ? `${quantity} ${name}` : name}
+          </span>
+          {/* Which parts of the recipe this row covers. A row can draw on
+              several groups, because repeats are summed into one. */}
+          {ingredient.groupNames.length > 0 && (
+            <span className="text-muted-foreground text-xs">
+              {ingredient.groupNames.join(", ")}
+            </span>
+          )}
         </span>
         {ingredient.alreadyAdded && (
           <Badge variant="secondary" className="shrink-0">

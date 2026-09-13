@@ -48,7 +48,6 @@ import { createClient } from "@/lib/supabase/client";
 import {
   BLANK_STEP,
   type RecipeFormInput,
-  type RecipeFormValues,
 } from "@/schemas/recipe";
 
 /**
@@ -74,7 +73,7 @@ export function StepEditor({
   recipeId,
   photoUrls,
 }: {
-  control: Control<RecipeFormInput, unknown, RecipeFormValues>;
+  control: Control<RecipeFormInput, unknown, RecipeFormInput>;
   register: UseFormRegister<RecipeFormInput>;
   setValue: UseFormSetValue<RecipeFormInput>;
   errors: FieldErrors<RecipeFormInput>;
@@ -215,7 +214,7 @@ function StepRow({
 }: {
   id: string;
   index: number;
-  control: Control<RecipeFormInput, unknown, RecipeFormValues>;
+  control: Control<RecipeFormInput, unknown, RecipeFormInput>;
   register: UseFormRegister<RecipeFormInput>;
   setValue: UseFormSetValue<RecipeFormInput>;
   titleError: string | undefined;

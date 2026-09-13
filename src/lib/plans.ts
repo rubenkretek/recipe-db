@@ -1,15 +1,24 @@
 import { requireKitchenContext } from "@/lib/kitchen";
 import { signedUrlsFor } from "@/lib/photo-urls";
 import { scaleQuantityForShopping } from "@/lib/servings";
+import { combineRecipeLines } from "@/lib/shopping-merge";
 import { createClient } from "@/lib/supabase/server";
 import type { MealType } from "@/schemas/recipe";
 
 export type PlanStatus = "active" | "complete";
 
-/** One line in the ingredient picker. SPEC.md §6.3. */
+/**
+ * One row in the ingredient picker. SPEC.md §6.3.
+ *
+ * One row per ingredient *and unit*, not per recipe line: a recipe that needs
+ * vinegar in two groups offers it once, summed, because the list buys it once.
+ * See `combineRecipeLines`.
+ */
 export type PlannedIngredient = {
   ingredientId: string;
   name: string;
+  /** The recipe's headings this row draws on, e.g. ["Pickles", "Dressing"]. */
+  groupNames: string[];
   /**
    * BASE UNITS, already scaled to the planned servings and rounded for
    * shopping — so this is the number that will land on the list, and the picker
@@ -79,7 +88,7 @@ const PLAN_SELECT = `
       name, meal_type, archived_at, base_servings,
       recipe_photos ( storage_path, sort_order, id ),
       recipe_ingredients (
-        id, ingredient_id, quantity, unit, sort_order,
+        id, ingredient_id, quantity, unit, group_name, sort_order,
         ingredients ( name )
       )
     )
@@ -111,6 +120,7 @@ type PlanRow = {
         ingredient_id: string;
         quantity: number | null;
         unit: string | null;
+        group_name: string | null;
         sort_order: number;
         ingredients: { name: string } | null;
       }[];
@@ -151,20 +161,37 @@ function plannedIngredientsOf(
 
   const baseServings = planned.recipes?.base_servings ?? 1;
 
-  return [...(planned.recipes?.recipe_ingredients ?? [])]
-    .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
-    .map((ingredient) => ({
-      ingredientId: ingredient.ingredient_id,
-      name: ingredient.ingredients?.name ?? "Unknown ingredient",
-      quantity: scaleQuantityForShopping(
-        ingredient.quantity === null ? null : Number(ingredient.quantity),
-        ingredient.unit,
-        baseServings,
-        planned.servings,
-      ),
-      unit: ingredient.unit,
-      alreadyAdded: added.has(ingredient.ingredient_id),
-    }));
+  const sorted = [...(planned.recipes?.recipe_ingredients ?? [])].sort(
+    (a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id),
+  );
+  const names = new Map(
+    sorted.map((line) => [line.ingredient_id, line.ingredients?.name]),
+  );
+
+  // Repeats of one ingredient in one unit become a single row, summed BEFORE
+  // scaling so counts are rounded up once. See `combineRecipeLines`.
+  const combined = combineRecipeLines(
+    sorted.map((line) => ({
+      ingredientId: line.ingredient_id,
+      quantity: line.quantity === null ? null : Number(line.quantity),
+      unit: line.unit,
+      groupName: line.group_name,
+    })),
+  );
+
+  return combined.map((line) => ({
+    ingredientId: line.ingredientId,
+    name: names.get(line.ingredientId) ?? "Unknown ingredient",
+    groupNames: line.groupNames,
+    quantity: scaleQuantityForShopping(
+      line.quantity,
+      line.unit,
+      baseServings,
+      planned.servings,
+    ),
+    unit: line.unit,
+    alreadyAdded: added.has(line.ingredientId),
+  }));
 }
 
 async function toMealPlan(row: PlanRow): Promise<MealPlan> {

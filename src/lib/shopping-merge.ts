@@ -187,3 +187,74 @@ export function incrementedQuantity(
 ): number {
   return (currentQuantity ?? 0) + addQuantity;
 }
+
+/** One ingredient line of a recipe, in base units, as stored. */
+export type RecipeLine = {
+  ingredientId: string;
+  /** BASE UNITS, unscaled. Null for "to taste". */
+  quantity: number | null;
+  unit: string | null;
+  /** The heading the line sits under, e.g. "Dressing". Null when ungrouped. */
+  groupName: string | null;
+};
+
+/** Every line of one ingredient in one unit, added together. */
+export type CombinedRecipeLine = {
+  ingredientId: string;
+  /** BASE UNITS, still unscaled — the sum of the lines. */
+  quantity: number | null;
+  unit: string | null;
+  /** The distinct headings the lines came from, in recipe order. */
+  groupNames: string[];
+};
+
+/**
+ * Folds a recipe's repeated ingredients into one line per ingredient and unit.
+ *
+ * A recipe can need the same ingredient twice — vinegar in the pickles and again
+ * in the dressing — and with ingredient groups that is normal. The shopping list
+ * buys vinegar once, so the picker offers it once, with the quantities summed.
+ * The same ingredient in *different* units stays separate, by the same rule as
+ * everywhere else: 60ml and 50g of soy sauce are not 110 of anything
+ * (`canMerge`, SPEC.md §5.3).
+ *
+ * Sums BEFORE scaling, and callers scale the result once. Scaling each line
+ * first would round each count up separately and over-buy: two lines of one
+ * onion, scaled to a quarter, would be one onion each — two — when half an onion
+ * in total means buying one.
+ *
+ * Replaced a `.find()` that took only the first matching line, which silently
+ * dropped every repeat's quantity from the shopping list.
+ */
+export function combineRecipeLines(lines: RecipeLine[]): CombinedRecipeLine[] {
+  const combined: CombinedRecipeLine[] = [];
+
+  for (const line of lines) {
+    const match = combined.find(
+      (existing) =>
+        existing.ingredientId === line.ingredientId &&
+        canMerge(existing.unit, line.unit),
+    );
+
+    if (!match) {
+      combined.push({
+        ingredientId: line.ingredientId,
+        quantity: line.quantity,
+        unit: line.unit,
+        groupNames: line.groupName ? [line.groupName] : [],
+      });
+      continue;
+    }
+
+    // A null quantity only ever meets another null — a quantity always carries
+    // a unit and "to taste" never does — so there is nothing to add.
+    if (line.quantity !== null) {
+      match.quantity = (match.quantity ?? 0) + line.quantity;
+    }
+    if (line.groupName && !match.groupNames.includes(line.groupName)) {
+      match.groupNames.push(line.groupName);
+    }
+  }
+
+  return combined;
+}

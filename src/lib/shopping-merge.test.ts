@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { scaleQuantityForShopping } from "@/lib/servings";
 import {
+  combineRecipeLines,
   incrementedQuantity,
   planShoppingListAdditions,
   type ExistingItem,
   type MergeCandidate,
+  type RecipeLine,
 } from "@/lib/shopping-merge";
 
 const ONION = "11111111-1111-1111-1111-111111111111";
@@ -231,5 +234,112 @@ describe("incrementedQuantity", () => {
 
   it("treats a null existing quantity as zero", () => {
     expect(incrementedQuantity(null, 3)).toBe(3);
+  });
+});
+
+describe("combineRecipeLines", () => {
+  const VINEGAR = "33333333-3333-3333-3333-333333333333";
+  const SOY = "44444444-4444-4444-4444-444444444444";
+  const SALT = "55555555-5555-5555-5555-555555555555";
+
+  function line(overrides: Partial<RecipeLine>): RecipeLine {
+    return {
+      ingredientId: VINEGAR,
+      quantity: 60,
+      unit: "ml",
+      groupName: null,
+      ...overrides,
+    };
+  }
+
+  it("adds up the same ingredient in the same unit", () => {
+    // The real case that exposed the bug: vinegar in the pickles and the
+    // dressing. The old `.find()` kept only the first 60ml.
+    const combined = combineRecipeLines([
+      line({ quantity: 60, groupName: "Pickles" }),
+      line({ quantity: 37.5, groupName: "Dressing" }),
+    ]);
+
+    expect(combined).toEqual([
+      {
+        ingredientId: VINEGAR,
+        quantity: 97.5,
+        unit: "ml",
+        groupNames: ["Pickles", "Dressing"],
+      },
+    ]);
+  });
+
+  it("keeps the same ingredient in different units apart", () => {
+    // 60ml and 50g of soy sauce are not 110 of anything. SPEC.md §5.3.
+    const combined = combineRecipeLines([
+      line({ ingredientId: SOY, quantity: 60, unit: "ml" }),
+      line({ ingredientId: SOY, quantity: 50, unit: "g" }),
+    ]);
+
+    expect(combined).toHaveLength(2);
+    expect(combined.map((one) => one.unit)).toEqual(["ml", "g"]);
+  });
+
+  it("sums three or more lines", () => {
+    const combined = combineRecipeLines([
+      line({ quantity: 720 }),
+      line({ quantity: 10 }),
+      line({ quantity: 60 }),
+    ]);
+
+    expect(combined).toEqual([
+      expect.objectContaining({ quantity: 790 }),
+    ]);
+  });
+
+  it("keeps two unquantified lines unquantified", () => {
+    const combined = combineRecipeLines([
+      line({ ingredientId: SALT, quantity: null, unit: null }),
+      line({ ingredientId: SALT, quantity: null, unit: null }),
+    ]);
+
+    expect(combined).toEqual([
+      { ingredientId: SALT, quantity: null, unit: null, groupNames: [] },
+    ]);
+  });
+
+  it("lists each group once, in recipe order", () => {
+    const combined = combineRecipeLines([
+      line({ groupName: "Pickles" }),
+      line({ groupName: null }),
+      line({ groupName: "Pickles" }),
+      line({ groupName: "Dressing" }),
+    ]);
+
+    expect(combined[0].groupNames).toEqual(["Pickles", "Dressing"]);
+  });
+
+  it("keeps different ingredients in first-appearance order", () => {
+    const combined = combineRecipeLines([
+      line({ ingredientId: SOY }),
+      line({ ingredientId: VINEGAR }),
+      line({ ingredientId: SOY }),
+    ]);
+
+    expect(combined.map((one) => one.ingredientId)).toEqual([SOY, VINEGAR]);
+  });
+
+  it("sums before scaling, so counts are rounded up once, not per line", () => {
+    // Two lines of one onion in a recipe for 4, planned for 1. Half an onion
+    // in total means buying one. Scaling each line first would round each
+    // quarter up separately and buy two.
+    const lines = [
+      line({ ingredientId: SALT, quantity: 1, unit: "piece" }),
+      line({ ingredientId: SALT, quantity: 1, unit: "piece" }),
+    ];
+
+    const [onions] = combineRecipeLines(lines);
+    expect(scaleQuantityForShopping(onions.quantity, onions.unit, 4, 1)).toBe(1);
+
+    const perLine = lines.map((one) =>
+      scaleQuantityForShopping(one.quantity, one.unit, 4, 1),
+    );
+    expect(perLine.reduce((sum, value) => (sum ?? 0) + (value ?? 0), 0)).toBe(2);
   });
 });
