@@ -23,6 +23,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowUpDown,
+  Check,
   GripVertical,
   ImageIcon,
   Minus,
@@ -77,6 +79,11 @@ export function PlanBoard({
   const [items, setItems] = useState(recipes);
   const [lastRecipes, setLastRecipes] = useState(recipes);
   const [isPending, startTransition] = useTransition();
+
+  // Drag handles appear only while reordering. They are wanted rarely — a plan
+  // is reordered far less often than it is read — and a permanent handle in
+  // every row costs the recipe name about 28px, which is a lot on a phone.
+  const [isReordering, setIsReordering] = useState(false);
 
   // Props win whenever the server sends a new list, so an add or a remove from
   // elsewhere on the page does not leave this list stale. Adjusted during
@@ -145,6 +152,7 @@ export function PlanBoard({
             planned={planned}
             readOnly
             isPending={false}
+            isReordering={false}
           />
         ))}
       </ul>
@@ -152,35 +160,61 @@ export function PlanBoard({
   }
 
   return (
-    <DndContext
-      // Deterministic, so the accessibility id matches between server and
-      // client. See the note in `supermarket-manager.tsx`.
-      id="plan-board"
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-      onDragEnd={onDragEnd}
-    >
-      <SortableContext
-        items={items.map((item) => item.id)}
-        strategy={verticalListSortingStrategy}
+    <div className="flex flex-col gap-2">
+      {/* Nothing to reorder with a single recipe, so the button stays away. */}
+      {items.length > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-muted-foreground text-xs">
+            {isReordering ? "Drag the handles to reorder." : null}
+          </p>
+          <Button
+            type="button"
+            variant={isReordering ? "secondary" : "ghost"}
+            size="sm"
+            aria-pressed={isReordering}
+            onClick={() => setIsReordering((current) => !current)}
+          >
+            {isReordering ? (
+              <Check className="size-4" />
+            ) : (
+              <ArrowUpDown className="size-4" />
+            )}
+            {isReordering ? "Done" : "Reorder"}
+          </Button>
+        </div>
+      )}
+
+      <DndContext
+        // Deterministic, so the accessibility id matches between server and
+        // client. See the note in `supermarket-manager.tsx`.
+        id="plan-board"
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+        onDragEnd={onDragEnd}
       >
-        <ul className="flex flex-col divide-y rounded-lg border">
-          {items.map((planned) => (
-            <PlannedRecipeRow
-              key={planned.id}
-              planned={planned}
-              isPending={isPending}
-              onRemoved={() =>
-                setItems((current) =>
-                  current.filter((item) => item.id !== planned.id),
-                )
-              }
-            />
-          ))}
-        </ul>
-      </SortableContext>
-    </DndContext>
+        <SortableContext
+          items={items.map((item) => item.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <ul className="flex flex-col divide-y rounded-lg border">
+            {items.map((planned) => (
+              <PlannedRecipeRow
+                key={planned.id}
+                planned={planned}
+                isPending={isPending}
+                isReordering={isReordering}
+                onRemoved={() =>
+                  setItems((current) =>
+                    current.filter((item) => item.id !== planned.id),
+                  )
+                }
+              />
+            ))}
+          </ul>
+        </SortableContext>
+      </DndContext>
+    </div>
   );
 }
 
@@ -188,11 +222,14 @@ function PlannedRecipeRow({
   planned,
   isPending,
   readOnly = false,
+  isReordering,
   onRemoved,
 }: {
   planned: PlannedRecipe;
   isPending: boolean;
   readOnly?: boolean;
+  /** Shows the drag handle and lets the row be dragged. */
+  isReordering: boolean;
   onRemoved?: () => void;
 }) {
   const router = useRouter();
@@ -203,7 +240,7 @@ function PlannedRecipeRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: planned.id, disabled: readOnly });
+  } = useSortable({ id: planned.id, disabled: readOnly || !isReordering });
 
   const isCooked = planned.cookedAt !== null;
 
@@ -226,7 +263,7 @@ function PlannedRecipeRow({
       */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-0 sm:flex-1">
-          {!readOnly && (
+          {!readOnly && isReordering && (
             <button
               type="button"
               className="text-muted-foreground hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
