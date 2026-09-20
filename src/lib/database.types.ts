@@ -859,6 +859,7 @@ export type Database = {
       }
       supermarkets: {
         Row: {
+          colour: string | null
           created_at: string
           id: string
           kitchen_id: string
@@ -866,6 +867,7 @@ export type Database = {
           sort_order: number
         }
         Insert: {
+          colour?: string | null
           created_at?: string
           id?: string
           kitchen_id: string
@@ -873,6 +875,7 @@ export type Database = {
           sort_order?: number
         }
         Update: {
+          colour?: string | null
           created_at?: string
           id?: string
           kitchen_id?: string

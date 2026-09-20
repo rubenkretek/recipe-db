@@ -6,7 +6,7 @@ import { requireKitchenContext } from "@/lib/kitchen";
 import { createClient } from "@/lib/supabase/server";
 import {
   createSupermarketSchema,
-  renameSupermarketSchema,
+  updateSupermarketSchema,
   reorderSupermarketsSchema,
   setIngredientSupermarketsSchema,
   supermarketIdSchema,
@@ -52,6 +52,7 @@ export async function createSupermarket(
   const { error } = await supabase.from("supermarkets").insert({
     kitchen_id: active.id,
     name: parsed.data.name,
+    colour: parsed.data.colour,
     sort_order: (last?.sort_order ?? -1) + 1,
   });
 
@@ -67,11 +68,17 @@ export async function createSupermarket(
   revalidateSupermarketViews();
 }
 
-/** Renames a supermarket. Assignments follow automatically: they key on the id. */
-export async function renameSupermarket(
+/**
+ * Renames a supermarket and sets its colour.
+ *
+ * Assignments follow automatically: they key on the id, not the name. The
+ * colour may be null, which clears it — a shop with no colour is a supported
+ * state, not a missing value to be filled in.
+ */
+export async function updateSupermarket(
   input: unknown,
 ): Promise<ActionError | void> {
-  const parsed = renameSupermarketSchema.safeParse(input);
+  const parsed = updateSupermarketSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Check the name." };
   }
@@ -81,7 +88,7 @@ export async function renameSupermarket(
 
   const { error } = await supabase
     .from("supermarkets")
-    .update({ name: parsed.data.name })
+    .update({ name: parsed.data.name, colour: parsed.data.colour })
     .eq("id", parsed.data.supermarketId)
     .eq("kitchen_id", active.id);
 

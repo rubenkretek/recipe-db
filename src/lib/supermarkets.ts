@@ -5,6 +5,11 @@ export type Supermarket = {
   id: string;
   name: string;
   sortOrder: number;
+  /**
+   * `#rrggbb`, or null when the shop has never been given one. Null is not an
+   * error: the ingredients grid simply leaves that column untinted.
+   */
+  colour: string | null;
   /** How many ingredients are assigned here. Shown before a delete. */
   ingredientCount: number;
 };
@@ -29,7 +34,9 @@ export async function listSupermarkets(): Promise<Supermarket[]> {
   // it. RLS is the safety net, not the filter. See CLAUDE.md "Multi-tenancy".
   const { data, error } = await supabase
     .from("supermarkets")
-    .select("id, name, sort_order, ingredient_supermarkets ( ingredient_id )")
+    .select(
+      "id, name, sort_order, colour, ingredient_supermarkets ( ingredient_id )",
+    )
     .eq("kitchen_id", active.id)
     .order("sort_order", { ascending: true });
 
@@ -42,6 +49,7 @@ export async function listSupermarkets(): Promise<Supermarket[]> {
       id: supermarket.id,
       name: supermarket.name,
       sortOrder: supermarket.sort_order,
+      colour: supermarket.colour,
       ingredientCount: (supermarket.ingredient_supermarkets ?? []).length,
     }))
     .sort(

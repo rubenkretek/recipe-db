@@ -367,6 +367,12 @@ supermarkets (
   kitchen_id  uuid not null references kitchens(id) on delete cascade,
   name        text not null,
   sort_order  int not null default 0,
+  -- Tints this shop's column on the ingredients grid. Added 2026-09-20.
+  -- Nullable on purpose: a shop that has never been given a colour, including
+  -- every shop that existed before the migration, must still render. Stored as
+  -- '#rrggbb' because that is what <input type="color"> reads and CSS wants
+  -- back, with a check constraint so the column cannot hold anything else.
+  colour      text check (colour is null or colour ~* '^#[0-9a-f]{6}$'),
   created_at  timestamptz not null default now()
 )
 
@@ -806,6 +812,17 @@ something is added — so steps 2 and 5 are conditional.
 - Long-press or a trailing menu for edit quantity, change supermarkets, delete.
 - **Copy to clipboard**: copies the currently visible unchecked items, one per line, formatted as `2kg potatoes`. If "All" is selected, group under supermarket headings with a blank line between groups, mirroring the Google Keep format.
 - **Clear list**: destructive, confirmation dialog, deletes every item on the active list.
+
+### Ingredients screen detail
+
+Added 2026-09-20, replacing the per-supermarket grouped lists.
+
+- A **grid**: ingredients alphabetically down the y-axis, one row each however many shops sell them; supermarkets across the x-axis, in the household's own order.
+- Each cell holds a **checkbox** for "sold here", saved on the tap — this is ingredient-level shared state, so it changes where that ingredient is bought for every recipe using it.
+- Each supermarket column is **tinted with that shop's colour** (§5.5): 80% where the ingredient is assigned, 50% where it is not. A shop with no colour falls back to a neutral fill, so the column still reads.
+- The tint is a second signal, never the only one. The tick is what states assignment, because two strengths of the same hue are not a distinction everyone can make.
+- The **ingredient name column is sticky** and the grid scrolls horizontally inside its own container, so a kitchen with many shops does not make the page scroll sideways on a phone.
+- Tapping a name opens a dialog for **rename, default unit and merge** — the three controls that used to sit on each row, which a grid has no width for.
 - Free-text add box pinned at the bottom of the screen above the keyboard. Free-text items have no quantity or unit.
 
 ---
@@ -884,7 +901,7 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
 
 **Decided during Phase 5:**
 
-- **"Unassigned" is observable in the ingredient manager**, which groups by supermarket with an "Unassigned" group at the end. The spec's wording describes the shopping list, which is Phase 7 — without somewhere to appear now, neither acceptance criterion could be checked for two more phases. An ingredient assigned to two shops appears under both groups: this is not a partition.
+- **"Unassigned" is observable in the ingredient manager.** The spec's wording describes the shopping list, which is Phase 7 — without somewhere to appear now, neither acceptance criterion could be checked for two more phases. Originally one list per shop plus an "Unassigned" group at the end; **replaced on 2026-09-20 by the assignment grid** (§7), where an ingredient assigned to two shops is ticked in both columns and one assigned nowhere has an empty row. Both criteria are still observable, and an ingredient now appears exactly once however many shops sell it.
 - **A supermarket can be deleted**, behind a confirmation naming how many ingredients lose the assignment. The cascade takes only the join rows; no ingredient is harmed. This is unlike ingredients, which cannot be deleted at all while a recipe uses them.
 - **Assignment is ingredient-level shared state**, edited from three places and saved immediately in all of them. Changing it inside one recipe changes it for every recipe using that ingredient, so the control says so.
 

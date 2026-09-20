@@ -22,7 +22,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, GripVertical, Pencil, Plus, X } from "lucide-react";
+import { Check, GripVertical, Palette, Pencil, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -43,9 +43,18 @@ import type { Supermarket } from "@/lib/supermarkets";
 import {
   createSupermarket,
   deleteSupermarket,
-  renameSupermarket,
   reorderSupermarkets,
+  updateSupermarket,
 } from "@/server/actions/supermarkets";
+
+/**
+ * What the native colour picker opens on for a shop that has none yet.
+ *
+ * `<input type="color">` has no concept of "unset" — it always holds a colour,
+ * and would otherwise open on black, which nobody wants and which reads as a
+ * deliberate choice. The swatch stays empty until the picker is actually used.
+ */
+const UNSET_COLOUR_STARTING_POINT = "#94a3b8";
 
 /**
  * Create, rename, reorder and delete the kitchen's supermarkets.
@@ -64,8 +73,10 @@ export function SupermarketManager({
   const [items, setItems] = useState(supermarkets);
   const [lastSupermarkets, setLastSupermarkets] = useState(supermarkets);
   const [newName, setNewName] = useState("");
+  const [newColour, setNewColour] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftColour, setDraftColour] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Supermarket | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -163,21 +174,25 @@ export function SupermarketManager({
                   supermarket={supermarket}
                   isEditing={editingId === supermarket.id}
                   draftName={draftName}
+                  draftColour={draftColour}
                   isPending={isPending}
                   onDraftChange={setDraftName}
+                  onDraftColourChange={setDraftColour}
                   onStartEditing={() => {
                     setEditingId(supermarket.id);
                     setDraftName(supermarket.name);
+                    setDraftColour(supermarket.colour);
                   }}
                   onCancelEditing={() => setEditingId(null)}
-                  onRename={() => {
+                  onSave={() => {
                     run(
                       () =>
-                        renameSupermarket({
+                        updateSupermarket({
                           supermarketId: supermarket.id,
                           name: draftName,
+                          colour: draftColour,
                         }),
-                      "Renamed.",
+                      "Saved.",
                     );
                     setEditingId(null);
                   }}
@@ -194,8 +209,12 @@ export function SupermarketManager({
         onSubmit={(event) => {
           event.preventDefault();
           if (!newName.trim()) return;
-          run(() => createSupermarket({ name: newName }), "Supermarket added.");
+          run(
+            () => createSupermarket({ name: newName, colour: newColour }),
+            "Supermarket added.",
+          );
           setNewName("");
+          setNewColour(null);
         }}
       >
         <Input
@@ -203,6 +222,11 @@ export function SupermarketManager({
           onChange={(event) => setNewName(event.target.value)}
           placeholder="Add a supermarket"
           aria-label="New supermarket name"
+        />
+        <ColourField
+          value={newColour}
+          onChange={setNewColour}
+          label="Colour for the new supermarket"
         />
         <Button type="submit" variant="secondary" disabled={isPending}>
           <Plus className="size-4" />
@@ -252,25 +276,83 @@ export function SupermarketManager({
   );
 }
 
+/**
+ * The colour control: a swatch that opens the browser's colour picker.
+ *
+ * The native input is laid over the swatch at zero opacity rather than styled
+ * directly, because `<input type="color">` is barely styleable across browsers.
+ * Clearing is a separate button, since the native picker cannot express "none".
+ */
+function ColourField({
+  value,
+  onChange,
+  label,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-0.5">
+      <span className="relative inline-flex size-9 items-center justify-center rounded-md border">
+        <input
+          type="color"
+          value={value ?? UNSET_COLOUR_STARTING_POINT}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label={label}
+          className="absolute inset-0 size-full cursor-pointer opacity-0"
+        />
+        {value ? (
+          <span
+            aria-hidden
+            className="size-5 rounded"
+            style={{ backgroundColor: value }}
+          />
+        ) : (
+          <Palette aria-hidden className="text-muted-foreground size-4" />
+        )}
+      </span>
+
+      {/* Only offered once there is something to clear. */}
+      {value && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          aria-label={`Clear ${label.toLowerCase()}`}
+          onClick={() => onChange(null)}
+        >
+          <X className="size-3" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function SupermarketRow({
   supermarket,
   isEditing,
   draftName,
+  draftColour,
   isPending,
   onDraftChange,
+  onDraftColourChange,
   onStartEditing,
   onCancelEditing,
-  onRename,
+  onSave,
   onDelete,
 }: {
   supermarket: Supermarket;
   isEditing: boolean;
   draftName: string;
+  draftColour: string | null;
   isPending: boolean;
   onDraftChange: (value: string) => void;
+  onDraftColourChange: (value: string | null) => void;
   onStartEditing: () => void;
   onCancelEditing: () => void;
-  onRename: () => void;
+  onSave: () => void;
   onDelete: () => void;
 }) {
   const {
@@ -307,7 +389,7 @@ function SupermarketRow({
           className="flex flex-1 items-center gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            onRename();
+            onSave();
           }}
         >
           <Input
@@ -315,6 +397,11 @@ function SupermarketRow({
             onChange={(event) => onDraftChange(event.target.value)}
             aria-label="Supermarket name"
             autoFocus
+          />
+          <ColourField
+            value={draftColour}
+            onChange={onDraftColourChange}
+            label={`Colour for ${supermarket.name}`}
           />
           <Button type="submit" size="icon" className="size-8" disabled={isPending}>
             <Check className="size-4" />
@@ -331,6 +418,22 @@ function SupermarketRow({
         </form>
       ) : (
         <>
+          {/* A dot rather than a filled row: the colour belongs to the shop,
+              and tinting the whole row here would compete with the grid. */}
+          <span
+            aria-hidden
+            className={
+              supermarket.colour
+                ? "size-4 shrink-0 rounded-full border"
+                : "size-4 shrink-0 rounded-full border border-dashed"
+            }
+            style={
+              supermarket.colour
+                ? { backgroundColor: supermarket.colour }
+                : undefined
+            }
+          />
+
           <div className="flex-1">
             <p className="text-sm font-medium">{supermarket.name}</p>
             <p className="text-muted-foreground text-xs">
@@ -348,7 +451,7 @@ function SupermarketRow({
             variant="ghost"
             size="icon"
             className="size-8"
-            aria-label={`Rename ${supermarket.name}`}
+            aria-label={`Edit ${supermarket.name}`}
             onClick={onStartEditing}
           >
             <Pencil className="size-4" />

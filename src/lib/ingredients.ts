@@ -57,47 +57,7 @@ export async function listIngredients(): Promise<ManagedIngredient[]> {
   }));
 }
 
-export type IngredientGroup = {
-  /** Null for the "Unassigned" group, which always sorts last. */
-  supermarketId: string | null;
-  name: string;
-  ingredients: ManagedIngredient[];
-};
-
-/**
- * Groups ingredients by supermarket, with an "Unassigned" group at the end.
- *
- * An ingredient assigned to two shops appears under **both** — this is not a
- * partition. That is SPEC.md §8 Phase 5 acceptance criterion 1, and the group
- * for ingredients assigned nowhere is criterion 2. Until the shopping list
- * exists in Phase 7, this view is the only place either can be observed.
- *
- * Pure: takes what `listIngredients` and `listSupermarkets` already fetched
- * rather than querying again.
- */
-export function groupIngredientsBySupermarket(
-  ingredients: ManagedIngredient[],
-  supermarkets: { id: string; name: string }[],
-): IngredientGroup[] {
-  const groups: IngredientGroup[] = supermarkets.map((supermarket) => ({
-    supermarketId: supermarket.id,
-    name: supermarket.name,
-    ingredients: ingredients.filter((ingredient) =>
-      ingredient.supermarketIds.includes(supermarket.id),
-    ),
-  }));
-
-  const unassigned = ingredients.filter(
-    (ingredient) => ingredient.supermarketIds.length === 0,
-  );
-
-  // Always present, even when empty, so the concept is visible before anything
-  // has been assigned.
-  groups.push({
-    supermarketId: null,
-    name: "Unassigned",
-    ingredients: unassigned,
-  });
-
-  return groups;
-}
+// `groupIngredientsBySupermarket()` lived here until 2026-09-20. The ingredient
+// manager showed one list per shop, so an ingredient sold at three appeared
+// three times; it is now a grid with a column per shop, which needs no
+// grouping. Nothing else called it, so it went rather than sitting unused.

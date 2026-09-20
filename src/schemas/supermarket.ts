@@ -11,13 +11,29 @@ const supermarketName = z
   .min(1, "Give the supermarket a name.")
   .max(60, "That name is too long.");
 
+/**
+ * A shop's colour, used to tint its column on the ingredients grid.
+ *
+ * `#rrggbb`, matching the check constraint on the column and what
+ * `<input type="color">` produces. Null is a real value meaning "no colour":
+ * every view has to render a shop that has never been given one.
+ */
+const supermarketColour = z
+  .string()
+  .regex(/^#[0-9a-f]{6}$/i, "A colour must look like #a1b2c3.")
+  .nullable()
+  .default(null);
+
 export const createSupermarketSchema = z.object({
   name: supermarketName,
+  colour: supermarketColour,
 });
 
-export const renameSupermarketSchema = z.object({
+/** Renaming and recolouring are one action: both are edits to the same row. */
+export const updateSupermarketSchema = z.object({
   supermarketId: z.uuid(),
   name: supermarketName,
+  colour: supermarketColour,
 });
 
 export const supermarketIdSchema = z.object({
@@ -48,7 +64,7 @@ export const setIngredientSupermarketsSchema = z.object({
 });
 
 export type CreateSupermarketInput = z.infer<typeof createSupermarketSchema>;
-export type RenameSupermarketInput = z.infer<typeof renameSupermarketSchema>;
+export type UpdateSupermarketInput = z.infer<typeof updateSupermarketSchema>;
 export type SetIngredientSupermarketsInput = z.infer<
   typeof setIngredientSupermarketsSchema
 >;
