@@ -26,6 +26,7 @@ import {
   ArrowUpDown,
   Check,
   ChevronDown,
+  CookingPot,
   GripVertical,
   ImageIcon,
   Minus,
@@ -42,17 +43,14 @@ import { toast } from "sonner";
 import { IngredientPicker } from "@/components/plan/ingredient-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { PlannedRecipe } from "@/lib/plans";
-import {
-  MAX_PLANNED_SERVINGS,
-  MIN_PLANNED_SERVINGS,
-} from "@/schemas/plan";
+import { cn } from "@/lib/utils";
+import { MAX_PLANNED_SERVINGS, MIN_PLANNED_SERVINGS } from "@/schemas/plan";
 import {
   removeFromPlan,
   reorderPlannedRecipes,
@@ -152,7 +150,7 @@ export function PlanBoard({
 
   if (readOnly) {
     return (
-      <ul className="flex flex-col divide-y rounded-lg border">
+      <ul className="flex flex-col gap-6">
         {items.map((planned) => (
           <PlannedRecipeRow
             key={planned.id}
@@ -204,7 +202,7 @@ export function PlanBoard({
           items={items.map((item) => item.id)}
           strategy={verticalListSortingStrategy}
         >
-          <ul className="flex flex-col divide-y rounded-lg border">
+          <ul className="flex flex-col gap-6">
             {items.map((planned) => (
               <PlannedRecipeRow
                 key={planned.id}
@@ -255,11 +253,17 @@ function PlannedRecipeRow({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={
-        isDragging
-          ? "bg-background relative z-10 flex flex-col gap-2 p-3 shadow-lg"
-          : "flex flex-col gap-2 p-3"
-      }
+      className={cn(
+        // Its own card, separated by a gap, rather than a band in one long
+        // bordered list: each row is a recipe with its own actions.
+        "bg-background bg-gray-900 flex flex-col gap-2 rounded-lg border p-3",
+        // A cooked recipe recedes: it is done, and what is left to cook should
+        // be what catches the eye.
+        isCooked && "bg-muted/40",
+        // Last, so the lifted row keeps a solid background while dragging
+        // rather than the cooked tint. `cn` merges the conflicting background.
+        isDragging && "bg-background relative z-10 shadow-lg",
+      )}
     >
       {/*
         Wraps on a phone: the name takes the whole first line and the controls
@@ -316,14 +320,15 @@ function PlannedRecipeRow({
               <Badge variant="outline" className="capitalize">
                 {planned.mealType}
               </Badge>
-              {isCooked && <Badge variant="secondary">Cooked</Badge>}
+              {/* No "Cooked" badge: the button below says so, and the greyed
+                  card and struck-through name already carry it. */}
               {planned.archivedAt && <Badge variant="outline">Archived</Badge>}
             </div>
           </div>
         </div>
 
         {/* Right-aligned on the phone's second line, inline on wider screens. */}
-        <div className="ml-auto flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 justify-between w-full items-between gap-3">
           {readOnly ? (
             <span className="text-muted-foreground text-sm tabular-nums">
               {planned.servings}{" "}
@@ -334,71 +339,99 @@ function PlannedRecipeRow({
           )}
 
           {!readOnly && (
-            <>
-              <Checkbox
-                checked={isCooked}
-                aria-label={`Mark ${planned.name} cooked`}
-                onCheckedChange={(checked) => {
-                  // Not optimistic: the row restyles heavily when this flips,
-                  // and a revert would be more jarring than the wait.
-                  void setCooked({
-                    plannedRecipeId: planned.id,
-                    cooked: checked === true,
-                  }).then((result) => {
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="text-destructive w-24"
+              aria-label={`Remove ${planned.name} from the plan`}
+              disabled={isPending}
+              onClick={() => {
+                onRemoved?.();
+                void removeFromPlan({ plannedRecipeId: planned.id }).then(
+                  (result) => {
                     if (result?.error) toast.error(result.error);
                     router.refresh();
-                  });
-                }}
-              />
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-destructive size-8 shrink-0"
-                aria-label={`Remove ${planned.name} from the plan`}
-                disabled={isPending}
-                onClick={() => {
-                  onRemoved?.();
-                  void removeFromPlan({ plannedRecipeId: planned.id }).then(
-                    (result) => {
-                      if (result?.error) toast.error(result.error);
-                      router.refresh();
-                    },
-                  );
-                }}
-              >
-                <X className="size-4" />
-              </Button>
-            </>
+                  },
+                );
+              }}
+            >
+              <span>Remove</span>
+              <X className="size-4" />
+            </Button>
           )}
         </div>
       </div>
 
-      {/* On its own line: with a thumbnail, a stepper, a cooked tick and a
-          remove button already in the row, a fifth control alongside them is
-          unusable on a phone. SPEC.md §7 plan-screen detail. */}
-      {!readOnly && planned.ingredients.length > 0 && (
-        <IngredientPicker
-          recipes={[planned]}
-          mode="recipe"
-          trigger={
-            <Button
-              type="button"
-              variant={planned.addedCount > 0 ? "ghost" : "secondary"}
-              size="sm"
-              className="w-full justify-start"
-            >
-              <ShoppingCart className="size-4" />
-              Add ingredients
-              {planned.addedCount > 0 && (
-                <span className="text-muted-foreground font-normal">
-                  {planned.addedCount} of {planned.ingredients.length} added
-                </span>
+      {/* The row's two actions, half the card each. Full width beats squeezing
+          them beside the thumbnail: both are tapped with a thumb.
+          SPEC.md §7 plan-screen detail. */}
+      {!readOnly && (
+        <div className="grid grid-cols-2 gap-2">
+          {planned.ingredients.length > 0 && (
+            <IngredientPicker
+              recipes={[planned]}
+              mode="recipe"
+              trigger={
+                <Button
+                  type="button"
+                  // `outline` rather than `ghost` once something has been
+                  // added: a ghost button has no border or fill and reads as
+                  // plain text sitting next to a real button.
+                  variant={planned.addedCount > 0 ? "outline" : "secondary"}
+                  size="sm"
+                  className="h-auto w-full flex-col gap-0.5 py-2"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ShoppingCart className="size-4" />
+                    Add ingredients
+                  </span>
+                  {/* Quieter than the label: a progress note, not the action. */}
+                  {planned.addedCount > 0 && (
+                    <span className="text-muted-foreground text-[10px] font-normal">
+                      {planned.addedCount} of {planned.ingredients.length} added
+                    </span>
+                  )}
+                </Button>
+              }
+            />
+          )}
+
+          <Button
+            type="button"
+            variant={isCooked ? "secondary" : "outline"}
+            size="sm"
+            // A toggle, so it reports its state rather than just its label.
+            aria-pressed={isCooked}
+            className={cn(
+              "h-auto w-full flex-col gap-0.5 py-2",
+              // Nothing to add from a recipe with no ingredients, so this takes
+              // the whole width rather than leaving a gap.
+              planned.ingredients.length === 0 && "col-span-2",
+            )}
+            disabled={isPending}
+            onClick={() => {
+              // Not optimistic: the card restyles heavily when this flips, and
+              // a revert would be more jarring than the wait.
+              void setCooked({
+                plannedRecipeId: planned.id,
+                cooked: !isCooked,
+              }).then((result) => {
+                if (result?.error) toast.error(result.error);
+                router.refresh();
+              });
+            }}
+          >
+            <span className="flex items-center gap-1.5">
+              {isCooked ? (
+                <Check className="size-4" />
+              ) : (
+                <CookingPot className="size-4" />
               )}
-            </Button>
-          }
-        />
+              {isCooked ? "Cooked" : "Mark cooked"}
+            </span>
+          </Button>
+        </div>
       )}
     </li>
   );
