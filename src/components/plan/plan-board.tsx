@@ -25,11 +25,13 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowUpDown,
   Check,
+  ChevronDown,
   GripVertical,
   ImageIcon,
   Minus,
   Plus,
   ShoppingCart,
+  Users,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,6 +43,11 @@ import { IngredientPicker } from "@/components/plan/ingredient-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { PlannedRecipe } from "@/lib/plans";
 import {
   MAX_PLANNED_SERVINGS,
@@ -398,12 +405,18 @@ function PlannedRecipeRow({
 }
 
 /**
- * The per-recipe servings control.
+ * The per-recipe servings control: a small button showing the number, with the
+ * stepper itself in a popover.
+ *
+ * A permanent stepper is three controls wide in every row — roughly 100px — for
+ * a number that is set once when the recipe goes on the plan and rarely touched
+ * again. The button states the servings, which is what you actually read, and
+ * the `Users` icon plus the chevron say it opens something.
  *
  * Unlike the recipe detail page's stepper, this persists: it is the number the
- * Phase 7 ingredient picker will scale by. SPEC.md §6.2. The value updates
- * locally on every tap and the write is debounced, so holding `+` is one round
- * trip rather than one per press.
+ * ingredient picker scales by. SPEC.md §6.2. The value updates locally on every
+ * tap and the write is debounced, so holding `+` is one round trip rather than
+ * one per press.
  */
 function ServingsStepper({ planned }: { planned: PlannedRecipe }) {
   const router = useRouter();
@@ -448,32 +461,61 @@ function ServingsStepper({ planned }: { planned: PlannedRecipe }) {
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-1">
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="size-8"
-        aria-label={`Fewer servings of ${planned.name}`}
-        disabled={servings <= MIN_PLANNED_SERVINGS}
-        onClick={() => change(servings - 1)}
-      >
-        <Minus className="size-4" />
-      </Button>
-      <span className="w-6 text-center text-sm tabular-nums" aria-live="polite">
-        {servings}
-      </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="size-8"
-        aria-label={`More servings of ${planned.name}`}
-        disabled={servings >= MAX_PLANNED_SERVINGS}
-        onClick={() => change(servings + 1)}
-      >
-        <Plus className="size-4" />
-      </Button>
-    </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 shrink-0 gap-1 px-2"
+          // The visible number is the servings; the label says what pressing
+          // this does, which the number alone would not.
+          aria-label={`Change servings for ${planned.name}`}
+        >
+          <Users className="size-3.5" />
+          <span className="text-xs tabular-nums">{servings}</span>
+          <ChevronDown className="text-muted-foreground size-3" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent align="end" className="w-auto p-3">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">Servings</p>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-8"
+              aria-label={`Fewer servings of ${planned.name}`}
+              disabled={servings <= MIN_PLANNED_SERVINGS}
+              onClick={() => change(servings - 1)}
+            >
+              <Minus className="size-4" />
+            </Button>
+            <span
+              className="w-8 text-center text-sm tabular-nums"
+              aria-live="polite"
+            >
+              {servings}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-8"
+              aria-label={`More servings of ${planned.name}`}
+              disabled={servings >= MAX_PLANNED_SERVINGS}
+              onClick={() => change(servings + 1)}
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
+          <p className="text-muted-foreground text-xs">
+            What the shopping list scales by.
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
