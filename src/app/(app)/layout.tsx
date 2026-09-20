@@ -26,15 +26,20 @@ export default async function AppLayout({
       <header className="border-b">
         <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-2 px-4">
           <KitchenSwitcher kitchens={kitchens} active={active} />
-          <div className="flex items-center gap-2">
-            <MainNav />
-            <UserMenu displayName={profile.display_name} />
-          </div>
+          <UserMenu displayName={profile.display_name} />
         </div>
       </header>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+
+      {/*
+        The bottom padding clears the fixed navigation below. Without it the bar
+        covers the last of the page — the Save button on a long recipe form, or
+        the final item on a list.
+      */}
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-8 pb-[calc(var(--bottom-nav)+2rem)]">
         {children}
       </main>
+
+      <MainNav />
     </div>
   );
 }

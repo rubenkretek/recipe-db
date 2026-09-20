@@ -45,7 +45,15 @@ export default function RootLayout({
         >
           <Providers>
             {children}
-            <Toaster />
+            {/*
+              Lifted above the fixed bottom navigation, so a toast never lands
+              underneath it. Ticking an item in a shop is exactly when the
+              message matters.
+            */}
+            <Toaster
+              offset={{ bottom: "calc(var(--bottom-nav) + 0.5rem)" }}
+              mobileOffset={{ bottom: "calc(var(--bottom-nav) + 0.5rem)" }}
+            />
             <ServiceWorker />
           </Providers>
         </ThemeProvider>

@@ -296,7 +296,9 @@ function ManualItemForm() {
 
   return (
     <form
-      className="bg-background sticky bottom-0 flex gap-2 border-t py-3"
+      // Pinned just above the fixed bottom navigation rather than at the very
+      // bottom of the viewport, where the bar would cover it.
+      className="bg-background sticky bottom-(--bottom-nav) flex gap-2 border-t py-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (!name.trim()) return;

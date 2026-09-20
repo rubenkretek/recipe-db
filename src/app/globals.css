@@ -47,6 +47,16 @@
 }
 
 :root {
+  /*
+   * Height of the fixed bottom navigation, including the iPhone home-indicator
+   * inset. One value so the bar, the padding that keeps content clear of it and
+   * anything else pinned to the bottom cannot drift apart.
+   *
+   * `env(safe-area-inset-bottom)` is only non-zero because the root layout sets
+   * `viewport-fit: cover`; the 0px fallback covers every other browser.
+   */
+  --bottom-nav: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.148 0.004 228.8);
   --card: oklch(1 0 0);
