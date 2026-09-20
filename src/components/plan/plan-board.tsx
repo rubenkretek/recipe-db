@@ -217,102 +217,118 @@ function PlannedRecipeRow({
           : "flex flex-col gap-2 p-3"
       }
     >
-      <div className="flex items-center gap-3">
-      {!readOnly && (
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
-          aria-label={`Reorder ${planned.name}`}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="size-4" />
-        </button>
-      )}
+      {/*
+        Wraps on a phone: the name takes the whole first line and the controls
+        drop to a second one. `basis-full` is what forces that — with only
+        `min-w-0` the name would shrink to a sliver beside the controls instead
+        of wrapping, which left it a few characters wide at 360px. From `sm`
+        upwards everything fits on one line again.
+      */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-0 sm:flex-1">
+          {!readOnly && (
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
+              aria-label={`Reorder ${planned.name}`}
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical className="size-4" />
+            </button>
+          )}
 
-      <Link
-        href={`/recipes/${planned.recipeId}`}
-        className="bg-muted text-muted-foreground/40 flex size-12 shrink-0 items-center justify-center overflow-hidden rounded"
-      >
-        {planned.coverUrl ? (
-          <img
-            src={planned.coverUrl}
-            alt=""
-            loading="lazy"
-            className="size-full object-cover"
-          />
-        ) : (
-          <ImageIcon className="size-5" />
-        )}
-      </Link>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <Link
-          href={`/recipes/${planned.recipeId}`}
-          className={
-            isCooked
-              ? "text-muted-foreground truncate text-sm font-medium line-through"
-              : "truncate text-sm font-medium hover:underline"
-          }
-        >
-          {planned.name}
-        </Link>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline" className="capitalize">
-            {planned.mealType}
-          </Badge>
-          {isCooked && <Badge variant="secondary">Cooked</Badge>}
-          {planned.archivedAt && <Badge variant="outline">Archived</Badge>}
-        </div>
-      </div>
-
-      {readOnly ? (
-        <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
-          {planned.servings} {planned.servings === 1 ? "serving" : "servings"}
-        </span>
-      ) : (
-        <ServingsStepper planned={planned} />
-      )}
-
-      {!readOnly && (
-        <>
-          <Checkbox
-            checked={isCooked}
-            aria-label={`Mark ${planned.name} cooked`}
-            onCheckedChange={(checked) => {
-              // Not optimistic: the row restyles heavily when this flips, and a
-              // revert would be more jarring than the wait.
-              void setCooked({
-                plannedRecipeId: planned.id,
-                cooked: checked === true,
-              }).then((result) => {
-                if (result?.error) toast.error(result.error);
-                router.refresh();
-              });
-            }}
-          />
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="text-destructive size-8 shrink-0"
-            aria-label={`Remove ${planned.name} from the plan`}
-            disabled={isPending}
-            onClick={() => {
-              onRemoved?.();
-              void removeFromPlan({ plannedRecipeId: planned.id }).then(
-                (result) => {
-                  if (result?.error) toast.error(result.error);
-                  router.refresh();
-                },
-              );
-            }}
+          <Link
+            href={`/recipes/${planned.recipeId}`}
+            className="bg-muted text-muted-foreground/40 flex size-12 shrink-0 items-center justify-center overflow-hidden rounded"
           >
-            <X className="size-4" />
-          </Button>
-        </>
-      )}
+            {planned.coverUrl ? (
+              <img
+                src={planned.coverUrl}
+                alt=""
+                loading="lazy"
+                className="size-full object-cover"
+              />
+            ) : (
+              <ImageIcon className="size-5" />
+            )}
+          </Link>
+
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            {/* Wraps rather than truncates: with a line to itself there is room
+                for it, and a cut-off recipe name is unreadable. `wrap-break-word`
+                keeps a long unbroken word inside the row. */}
+            <Link
+              href={`/recipes/${planned.recipeId}`}
+              className={
+                isCooked
+                  ? "text-muted-foreground text-sm font-medium wrap-break-word line-through"
+                  : "text-sm font-medium wrap-break-word hover:underline"
+              }
+            >
+              {planned.name}
+            </Link>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" className="capitalize">
+                {planned.mealType}
+              </Badge>
+              {isCooked && <Badge variant="secondary">Cooked</Badge>}
+              {planned.archivedAt && <Badge variant="outline">Archived</Badge>}
+            </div>
+          </div>
+        </div>
+
+        {/* Right-aligned on the phone's second line, inline on wider screens. */}
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          {readOnly ? (
+            <span className="text-muted-foreground text-sm tabular-nums">
+              {planned.servings}{" "}
+              {planned.servings === 1 ? "serving" : "servings"}
+            </span>
+          ) : (
+            <ServingsStepper planned={planned} />
+          )}
+
+          {!readOnly && (
+            <>
+              <Checkbox
+                checked={isCooked}
+                aria-label={`Mark ${planned.name} cooked`}
+                onCheckedChange={(checked) => {
+                  // Not optimistic: the row restyles heavily when this flips,
+                  // and a revert would be more jarring than the wait.
+                  void setCooked({
+                    plannedRecipeId: planned.id,
+                    cooked: checked === true,
+                  }).then((result) => {
+                    if (result?.error) toast.error(result.error);
+                    router.refresh();
+                  });
+                }}
+              />
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-destructive size-8 shrink-0"
+                aria-label={`Remove ${planned.name} from the plan`}
+                disabled={isPending}
+                onClick={() => {
+                  onRemoved?.();
+                  void removeFromPlan({ plannedRecipeId: planned.id }).then(
+                    (result) => {
+                      if (result?.error) toast.error(result.error);
+                      router.refresh();
+                    },
+                  );
+                }}
+              >
+                <X className="size-4" />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* On its own line: with a thumbnail, a stepper, a cooked tick and a
