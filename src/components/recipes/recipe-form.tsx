@@ -79,6 +79,7 @@ export function RecipeForm({
   assignmentsByIngredient,
   kitchenId,
   recipe,
+  initialValues,
 }: {
   allTags: RecipeTag[];
   allIngredients: IngredientOption[];
@@ -87,6 +88,14 @@ export function RecipeForm({
   /** For step photo storage paths, whose first segment is the kitchen id. */
   kitchenId: string;
   recipe?: RecipeDetail;
+  /**
+   * Starting values for a recipe that does not exist yet — what the file
+   * importer produces.
+   *
+   * Read once, like every `defaultValues`: to load a different draft the caller
+   * remounts this form with a new `key`. See `NewRecipeScreen`.
+   */
+  initialValues?: Partial<RecipeFormInput>;
 }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -139,6 +148,9 @@ export function RecipeForm({
               note: entry.line.note,
             },
       ),
+      // An imported draft wins over the empty defaults above. Spread last so a
+      // field the import did not fill keeps its normal starting value.
+      ...initialValues,
     },
   });
 

@@ -57,6 +57,37 @@ export async function listIngredients(): Promise<ManagedIngredient[]> {
   }));
 }
 
+/**
+ * Every recorded alias, for matching an imported name to an ingredient.
+ *
+ * `ingredient_aliases` was created in Phase 4 and sat unused until the file
+ * importer: it is what stops the second import of "red lentils (dried)" asking
+ * the same question as the first. Aliases are written only when a person
+ * confirms a name, never by the model.
+ */
+export async function listIngredientAliases(): Promise<
+  { ingredientId: string; alias: string }[]
+> {
+  const { active } = await requireKitchenContext();
+  const supabase = await createClient();
+
+  // Filtered by the active kitchen explicitly, even though RLS would already do
+  // it. RLS is the safety net, not the filter. See CLAUDE.md "Multi-tenancy".
+  const { data, error } = await supabase
+    .from("ingredient_aliases")
+    .select("ingredient_id, alias")
+    .eq("kitchen_id", active.id);
+
+  if (error) {
+    throw new Error(`Could not load ingredient aliases: ${error.message}`);
+  }
+
+  return (data ?? []).map((row) => ({
+    ingredientId: row.ingredient_id,
+    alias: row.alias,
+  }));
+}
+
 export type IngredientSummary = {
   total: number;
   /** Assigned to no supermarket at all. */

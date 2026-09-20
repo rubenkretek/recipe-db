@@ -1,6 +1,7 @@
-import { RecipeForm } from "@/components/recipes/recipe-form";
+import { NewRecipeScreen } from "@/components/recipes/new-recipe-screen";
 import { listIngredients } from "@/lib/ingredients";
 import { requireKitchenContext } from "@/lib/kitchen";
+import { isImportConfigured } from "@/lib/recipe-import";
 import { listTags } from "@/lib/recipes";
 import { listSupermarkets } from "@/lib/supermarkets";
 
@@ -36,12 +37,14 @@ export default async function NewRecipePage() {
         Photos can be added once the recipe is saved.
       </p>
 
-      <RecipeForm
+      <NewRecipeScreen
         allTags={allTags}
         allIngredients={allIngredients}
         supermarkets={supermarkets}
         assignmentsByIngredient={assignmentsByIngredient}
         kitchenId={active.id}
+        // Checked on the server: the key is a secret and never reaches here.
+        canImport={isImportConfigured()}
       />
     </div>
   );

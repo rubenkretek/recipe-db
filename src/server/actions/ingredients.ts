@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireKitchenContext } from "@/lib/kitchen";
 import {
   createIngredientSchema,
+  recordIngredientAliasSchema,
   mergeIngredientsSchema,
   renameIngredientSchema,
   setDefaultUnitSchema,
@@ -25,6 +26,10 @@ export type Ingredient = {
 function revalidateIngredientViews(): void {
   revalidatePath("/recipes");
   revalidatePath("/settings/ingredients");
+  // The new-recipe page renders the ingredient list the editor picks from, and
+  // the importer creates ingredients while sitting on it. Without this it keeps
+  // serving a list built before they existed.
+  revalidatePath("/recipes/new");
   // Every recipe detail and edit page embeds ingredient names, and there is no
   // way to know which ones without a query, so refresh the whole subtree.
   revalidatePath("/recipes/[id]", "page");
@@ -93,6 +98,65 @@ export async function findOrCreateIngredient(
   return {
     error: created.error?.message ?? "Could not create the ingredient.",
   };
+}
+
+/**
+ * Records that an imported file called an existing ingredient something else.
+ *
+ * This is how the importer gets better with use: confirming once that "red
+ * lentils (dried)" is the kitchen's "red lentils" means the next file saying
+ * the same thing matches silently. Written only when a person confirms it —
+ * never from the model's own guess, which is exactly the judgement the review
+ * step exists to take.
+ *
+ * An alias that merely repeats the ingredient's own name is dropped rather than
+ * stored: it would match anyway, and `ingredient_aliases` has no unique index
+ * to stop it accumulating. Recording the same alias twice is likewise a no-op,
+ * not an error — it is the same fact arriving again.
+ */
+export async function recordIngredientAlias(
+  input: unknown,
+): Promise<ActionError | void> {
+  const parsed = recordIngredientAliasSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the alias." };
+  }
+
+  const { active } = await requireKitchenContext();
+  const supabase = await createClient();
+  const alias = parsed.data.alias;
+
+  const { data: ingredient } = await supabase
+    .from("ingredients")
+    .select("name")
+    .eq("id", parsed.data.ingredientId)
+    .eq("kitchen_id", active.id)
+    .maybeSingle();
+
+  if (!ingredient || ingredient.name.toLowerCase() === alias.toLowerCase()) {
+    return;
+  }
+
+  const { data: existing } = await supabase
+    .from("ingredient_aliases")
+    .select("id")
+    .eq("kitchen_id", active.id)
+    .ilike("alias", alias)
+    .maybeSingle();
+
+  if (existing) {
+    return;
+  }
+
+  const { error } = await supabase.from("ingredient_aliases").insert({
+    kitchen_id: active.id,
+    ingredient_id: parsed.data.ingredientId,
+    alias,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
 }
 
 /**

@@ -1054,6 +1054,56 @@ pass first. Decided on 2026-09-13.
 
 ---
 
+### Added after Phase 8 — Import a recipe from a file *(2026-09-20)*
+
+**Scope:** A drop zone on `/recipes/new`. A markdown or text file — in practice a
+recipe exported from Notion — is read by the Anthropic API into the shape
+`RecipeFormInput` already has, and fills the normal recipe form. Nothing is
+written until the user saves.
+
+Built because entering the Notion recipes by hand (the reason the Notion import
+in §8 was scrapped) is the thing that stalls, and a draft to correct is a
+different job from typing one from scratch.
+
+**How it divides the work.** `src/lib/import-parse.ts` is pure and tested and
+owns everything mechanical: fractions (`½`, `1 1/2`, `~1/4`), unit synonyms
+(`tablespoons` → `tbsp`, `tin` → `can`), markdown links, and telling a bracket
+that restates a quantity (`225 g (1/2 lb)`) from one that says something else
+(`(optional)`, `(dried)`). The model gets only the ambiguous half: where an
+ingredient's name ends and its preparation begins, and what to call a step in a
+file that numbers them `## 1`. Its answer is normalised back through the same
+module, so a unit it invented cannot reach `toBase()`.
+
+**Checked twice**, because a single pass drops an ingredient now and then and
+nothing downstream can tell. The second call gets the file and the first answer
+and is asked only what is missing — a question with a checkable answer. A
+mechanical sweep for file lines nothing in the draft accounts for runs
+afterwards and is shown to the user, because a model asked whether it missed
+anything is not a disinterested witness.
+
+**Ingredients are matched, never assumed.** Exact names and recorded aliases are
+taken as certain; anything close is offered as a suggestion the user confirms.
+Confirming records the file's wording in `ingredient_aliases` — created in Phase
+4 and unused until now — so the next file saying "red lentils (dried)" matches
+silently.
+
+**Defaults:** 4 servings when the file does not say (the manual editor starts at
+2); meal type inferred; `Eating this week`, `<year> Reviewed`, `Rating (out of
+10)` and `Added to Recipe-db` dropped; every URL discarded except `Link:`, which
+becomes `source_url`.
+
+**Deviations from the URL importer described below:** a server action rather than
+a route handler (the file is a few KB of text the browser has already read, so
+the 1MB body limit is irrelevant and it inherits the session), and a file rather
+than a URL. The two share `importedRecipeSchema` and the prompt rules, so the URL
+importer becomes a second entry point rather than a second implementation.
+
+**Acceptance:** both sample exports import with every ingredient, quantity and
+step present after review; a file with no tags, link or servings imports rather
+than failing; nothing is written if the user discards the draft.
+
+---
+
 ## Future builds (unscheduled)
 
 Each keeps its former phase number in brackets, so older references in code
@@ -1081,7 +1131,13 @@ Nothing was built.
 
 ### Future build: AI import from URL (formerly Phase 10)
 
-**Scope:** A route handler taking a URL, fetching the page server-side, extracting the readable content, and calling the Anthropic API to return structured JSON: name, source URL, servings, meal type, suggested tags, method steps as an array of `{title, description}` (not a single method string — see `recipe_steps` in §5.4), and an ingredient array of `{quantity, unit, name, note}`. Quantities are converted to base units by the same `toBase` used everywhere else, so the model's output goes through one validated path. A review-and-confirm screen: nothing is written until the user accepts. Ingredient names are matched against existing kitchen ingredients and aliases, with unmatched ones flagged for create-or-link. Prefer JSON-LD `Recipe` schema when the page provides it, falling back to the model on raw text.
+**Partly built.** The file importer above (added 2026-09-20) already does the
+extraction, the validation, the ingredient matching and the review step. What is
+left of this is the front half only: fetching a URL server-side, preferring the
+page's JSON-LD `Recipe` when it has one, and reducing the page to readable text
+to feed the existing prompt.
+
+**Original scope:** A route handler taking a URL, fetching the page server-side, extracting the readable content, and calling the Anthropic API to return structured JSON: name, source URL, servings, meal type, suggested tags, method steps as an array of `{title, description}` (not a single method string — see `recipe_steps` in §5.4), and an ingredient array of `{quantity, unit, name, note}`. Quantities are converted to base units by the same `toBase` used everywhere else, so the model's output goes through one validated path. A review-and-confirm screen: nothing is written until the user accepts. Ingredient names are matched against existing kitchen ingredients and aliases, with unmatched ones flagged for create-or-link. Prefer JSON-LD `Recipe` schema when the page provides it, falling back to the model on raw text.
 
 **Acceptance:** three real recipe URLs from different sites import with correct ingredients and quantities after review; a URL that is not a recipe fails gracefully.
 

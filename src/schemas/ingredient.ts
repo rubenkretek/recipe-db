@@ -28,6 +28,22 @@ export const ingredientIdSchema = z.object({
 });
 
 /**
+ * Another name for an ingredient, learnt from an import.
+ *
+ * Recorded only when a person confirms that a file's wording — "red lentils
+ * (dried)" — means an ingredient they already have. The next import of the same
+ * file then matches it without asking again.
+ */
+export const recordIngredientAliasSchema = z.object({
+  ingredientId: z.uuid(),
+  alias: z
+    .string()
+    .trim()
+    .min(1, "An alias needs some text.")
+    .max(80, "That alias is too long."),
+});
+
+/**
  * A unit the editor offers. Validated against the same `UNITS` table the
  * conversion uses, so a unit that would make `toBase()` throw cannot be stored.
  */
