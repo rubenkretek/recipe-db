@@ -1,7 +1,8 @@
-import { BookOpen, CalendarDays, ShoppingCart } from "lucide-react";
+import { BookOpen, CalendarDays, Carrot, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getIngredientSummary } from "@/lib/ingredients";
 import { requireKitchenContext } from "@/lib/kitchen";
 import { describePlanPeriod } from "@/lib/plan-dates";
 import { getActivePlanSummary } from "@/lib/plans";
@@ -10,9 +11,10 @@ import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardPage() {
   const { active } = await requireKitchenContext();
-  const [plan, toBuy] = await Promise.all([
+  const [plan, toBuy, ingredients] = await Promise.all([
     getActivePlanSummary(),
     getUncheckedItemCount(),
+    getIngredientSummary(),
   ]);
   const supabase = await createClient();
 
@@ -39,9 +41,9 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* The three things the app does, in the order the core loop uses them.
-          Each gains a href in the phase that builds it. SPEC.md §8. */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* The three things the app does, in the order the core loop uses them,
+          then the library they all draw on. SPEC.md §8. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/recipes">
           <Card className="h-full transition-colors hover:border-foreground/20">
             <CardHeader>
@@ -92,6 +94,29 @@ export default async function DashboardPage() {
                 {toBuy === 0
                   ? "Nothing to buy."
                   : `${toBuy} ${toBuy === 1 ? "thing" : "things"} to get.`}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* The unassigned count rather than a bare total: those are the things
+            that arrive on a list under "Unassigned" instead of in an aisle, and
+            the grid behind this link is where that is fixed. */}
+        <Link href="/settings/ingredients">
+          <Card className="hover:border-foreground/20 h-full transition-colors">
+            <CardHeader>
+              <Carrot className="text-muted-foreground size-5" />
+              <CardTitle className="text-base">Ingredients</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground text-sm">
+                {ingredients.total === 0
+                  ? "None yet. They appear as you use them."
+                  : ingredients.unassigned === 0
+                    ? `${ingredients.total} ${
+                        ingredients.total === 1 ? "ingredient" : "ingredients"
+                      }, all with a shop.`
+                    : `${ingredients.unassigned} of ${ingredients.total} without a shop.`}
               </p>
             </CardContent>
           </Card>

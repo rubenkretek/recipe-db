@@ -57,6 +57,46 @@ export async function listIngredients(): Promise<ManagedIngredient[]> {
   }));
 }
 
+export type IngredientSummary = {
+  total: number;
+  /** Assigned to no supermarket at all. */
+  unassigned: number;
+};
+
+/**
+ * How many ingredients the kitchen has, and how many belong to no shop.
+ *
+ * Exists for the dashboard card, which is the way in to the ingredients grid.
+ * The unassigned count is the useful half: those are the things that land under
+ * "Unassigned" on a shopping list instead of in an aisle, and the grid is where
+ * that gets fixed. Deliberately lighter than `listIngredients()` — no recipe
+ * join, because a count does not need usage.
+ */
+export async function getIngredientSummary(): Promise<IngredientSummary> {
+  const { active } = await requireKitchenContext();
+  const supabase = await createClient();
+
+  // Filtered by the active kitchen explicitly, even though RLS would already do
+  // it. RLS is the safety net, not the filter. See CLAUDE.md "Multi-tenancy".
+  const { data, error } = await supabase
+    .from("ingredients")
+    .select("id, ingredient_supermarkets ( supermarket_id )")
+    .eq("kitchen_id", active.id);
+
+  if (error) {
+    throw new Error(`Could not count ingredients: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+
+  return {
+    total: rows.length,
+    unassigned: rows.filter(
+      (row) => (row.ingredient_supermarkets ?? []).length === 0,
+    ).length,
+  };
+}
+
 // `groupIngredientsBySupermarket()` lived here until 2026-09-20. The ingredient
 // manager showed one list per shop, so an ingredient sold at three appeared
 // three times; it is now a grid with a column per shop, which needs no

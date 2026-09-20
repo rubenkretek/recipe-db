@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, CalendarDays, ShoppingCart } from "lucide-react";
+import { BookOpen, CalendarDays, House, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -23,9 +23,12 @@ import { cn } from "@/lib/utils";
  * both have to agree with it.
  */
 const LINKS = [
-  { href: "/recipes", label: "Recipes", icon: BookOpen },
-  { href: "/plan", label: "Plan", icon: CalendarDays },
-  { href: "/shopping", label: "Shop", icon: ShoppingCart },
+  // `exact` is not decoration: every path starts with "/", so the prefix match
+  // the other tabs rely on would light Home on every screen in the app.
+  { href: "/", label: "Home", icon: House, exact: true },
+  { href: "/recipes", label: "Recipes", icon: BookOpen, exact: false },
+  { href: "/plan", label: "Plan", icon: CalendarDays, exact: false },
+  { href: "/shopping", label: "Shop", icon: ShoppingCart, exact: false },
 ];
 
 export function MainNav() {
@@ -39,9 +42,11 @@ export function MainNav() {
       className="bg-background/95 supports-backdrop-filter:bg-background/80 fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom,0px)] backdrop-blur"
     >
       <ul className="mx-auto flex h-14 w-full max-w-3xl items-stretch">
-        {LINKS.map(({ href, label, icon: Icon }) => {
+        {LINKS.map(({ href, label, icon: Icon, exact }) => {
           // Prefix match so /plan/history and /recipes/[id] keep their tab lit.
-          const isActive = pathname === href || pathname.startsWith(`${href}/`);
+          const isActive = exact
+            ? pathname === href
+            : pathname === href || pathname.startsWith(`${href}/`);
 
           return (
             <li key={href} className="flex-1">
