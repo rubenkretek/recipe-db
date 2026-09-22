@@ -70,6 +70,13 @@ export function ShoppingItemRow({
   const [editingQuantity, setEditingQuantity] = useState(false);
   const [editingSupermarkets, setEditingSupermarkets] = useState(false);
 
+  // Filtered from the full list rather than mapped from the item's own ids, so
+  // the segments come out in the order the household arranged their shops —
+  // the same order as the chips above and the aisle order they walk.
+  const shops = supermarkets.filter((one) =>
+    item.supermarketIds.includes(one.id),
+  );
+
   return (
     <li className="flex items-stretch gap-1 border-b last:border-b-0">
       <button
@@ -111,6 +118,26 @@ export function ShoppingItemRow({
         </span>
       </button>
 
+      {/* Out of the trailing menu and onto the row: changing where something is
+          bought is done mid-shop, one-handed, and a two-tap menu for it was a
+          tap too many. The swatch doubles as the current state. */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="my-auto size-9 shrink-0"
+        aria-label={
+          shops.length === 0
+            ? `Choose supermarkets for ${item.name}`
+            : `Change supermarkets for ${item.name}, currently ${shops
+                .map((shop) => shop.name)
+                .join(", ")}`
+        }
+        onClick={() => setEditingSupermarkets(true)}
+      >
+        <SupermarketSwatch shops={shops} />
+      </Button>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -127,10 +154,6 @@ export function ShoppingItemRow({
           <DropdownMenuItem onSelect={() => setEditingQuantity(true)}>
             <Pencil className="size-4" />
             Edit quantity
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setEditingSupermarkets(true)}>
-            <Store className="size-4" />
-            Change supermarkets
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
@@ -167,6 +190,38 @@ export function ShoppingItemRow({
         onSaved={onChanged}
       />
     </li>
+  );
+}
+
+/**
+ * The shops an item belongs to, as a strip of their colours.
+ *
+ * One segment per shop, in the household's own shop order. A shop with no
+ * colour still gets a segment, in neutral — the count is worth reading even
+ * before anyone has coloured anything, and an item in two shops should look
+ * different from one in a single shop either way.
+ *
+ * An item in no shop shows the store icon instead: there is no colour to draw,
+ * and the button still has to advertise what it does.
+ */
+function SupermarketSwatch({ shops }: { shops: Supermarket[] }) {
+  if (shops.length === 0) {
+    return <Store className="text-muted-foreground/60 size-4" />;
+  }
+
+  return (
+    <span
+      aria-hidden
+      className="flex h-4 w-6 overflow-hidden rounded-sm border"
+    >
+      {shops.map((shop) => (
+        <span
+          key={shop.id}
+          className={shop.colour ? "flex-1" : "bg-muted-foreground/30 flex-1"}
+          style={shop.colour ? { backgroundColor: shop.colour } : undefined}
+        />
+      ))}
+    </span>
   );
 }
 
