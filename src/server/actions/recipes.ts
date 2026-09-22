@@ -94,12 +94,16 @@ async function replaceRecipeIngredients(
     return null;
   }
 
-  let rows;
-  try {
-    rows = ingredients.map((ingredient, index) => {
+  // A plain loop rather than `map`, so a throw can name the line it came from.
+  // toBase refuses to guess at a missing or unknown unit, and the zod schema
+  // should have caught it first — this is the belt to that pair of braces, and
+  // "Unknown unit: null" with no row number was no use to anyone.
+  const rows = [];
+  for (const [index, ingredient] of ingredients.entries()) {
+    try {
       const { quantity, unit } = toBase(ingredient.quantity, ingredient.unit);
 
-      return {
+      rows.push({
         kitchen_id: kitchenId,
         recipe_id: recipeId,
         ingredient_id: ingredient.ingredientId,
@@ -113,12 +117,12 @@ async function replaceRecipeIngredients(
         // lines sharing it, so `sort_order` is what keeps a group together.
         group_name: ingredient.groupName,
         sort_order: index,
-      };
-    });
-  } catch (error) {
-    // toBase throws rather than guessing at an unknown unit. The zod schema
-    // should have caught it first, so this is the belt to that pair of braces.
-    return error instanceof Error ? error.message : "Unknown unit.";
+      });
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "its unit is not one we store.";
+      return `Ingredient ${index + 1} could not be saved: ${detail}`;
+    }
   }
 
   const { error: insertError } = await supabase
@@ -209,13 +213,57 @@ async function replaceRecipeSteps(
   return null;
 }
 
+/** What each top-level form field is called on screen. */
+const FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  mealType: "Meal type",
+  baseServings: "Serves",
+  sourceUrl: "Source link",
+  notes: "Notes",
+  tagIds: "Tags",
+  ingredients: "Ingredients",
+  steps: "Method",
+};
+
+/**
+ * Turns validation failures into something that says *where* to look.
+ *
+ * `issues[0].message` alone produced errors like "Pick an ingredient." on a
+ * form with twenty rows, or worse, a raw throw from deeper down. Every zod
+ * issue carries a path, so a row number is free — and reporting several at once
+ * means a form with three empty fields takes one round trip to fix, not three.
+ */
+function describeIssues(issues: { path: PropertyKey[]; message: string }[]): string {
+  const described = issues.slice(0, 3).map((issue) => {
+    const [field, index, child] = issue.path;
+    const label = FIELD_LABELS[String(field)] ?? String(field);
+
+    if (typeof index !== "number") {
+      return `${label}: ${issue.message}`;
+    }
+
+    // Steps are numbered for the author; ingredient rows are counted including
+    // their headings, which is what the editor shows. The child field is not
+    // named: every message below already says which control it means, and
+    // "row 3, unit: Pick a unit" reads worse than "row 3: Pick a unit".
+    void child;
+    const position = field === "steps" ? `step ${index + 1}` : `row ${index + 1}`;
+    return `${label}, ${position}: ${issue.message}`;
+  });
+
+  const rest = issues.length - described.length;
+  return rest > 0
+    ? `${described.join(" ")} (and ${rest} more ${rest === 1 ? "problem" : "problems"})`
+    : described.join(" ");
+}
+
 /** Creates a recipe and goes straight to it. Only the name is required. */
 export async function createRecipe(
   input: unknown,
 ): Promise<ActionError | void> {
   const parsed = createRecipeSchema.safeParse(input);
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Check the form." };
+    return { error: describeIssues(parsed.error.issues) || "Check the form." };
   }
 
   const { active } = await requireKitchenContext();
@@ -279,7 +327,7 @@ export async function updateRecipe(
 ): Promise<ActionError | void> {
   const parsed = updateRecipeSchema.safeParse(input);
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Check the form." };
+    return { error: describeIssues(parsed.error.issues) || "Check the form." };
   }
 
   const { active } = await requireKitchenContext();

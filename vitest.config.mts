@@ -5,10 +5,15 @@ import { defineConfig } from "vitest/config";
 /**
  * Deliberately minimal, per CLAUDE.md "Testing".
  *
- * Only three modules are ever tested — units.ts, servings.ts and (from Phase 7)
- * shopping-merge.ts — and all three are pure functions with no DOM and no
- * database. So there is no jsdom, no React Testing Library and no setup file:
- * the `node` environment is all that is needed.
+ * Only five modules are ever tested — units.ts, servings.ts, shopping-merge.ts
+ * (Phase 7), offline-queue.ts (Phase 8) and import-parse.ts (the file importer)
+ * — and all five are pure functions with no DOM and no database. So there is no
+ * jsdom, no React Testing Library and no setup file: the `node` environment is
+ * all that is needed.
+ *
+ * `include` below is a SINGLE-LEVEL glob, and that bites. A test file outside
+ * `src/lib/` is collected by nothing: `vitest run` on it reports "No test files
+ * found" and exits 1, which reads like a pass if you only skim the output.
  *
  * The `.mts` extension is deliberate. The project has no `"type": "module"`, so
  * a plain `vitest.config.ts` is loaded as CommonJS and warns about its own ESM

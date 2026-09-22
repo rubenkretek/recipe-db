@@ -250,6 +250,7 @@ export function RecipeForm({
           control={control}
           register={register}
           setValue={setValue}
+          errors={errors}
           allIngredients={allIngredients}
           supermarkets={supermarkets}
           assignmentsByIngredient={assignmentsByIngredient}

@@ -25,6 +25,7 @@ import {
   useFieldArray,
   useWatch,
   type Control,
+  type FieldErrors,
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
@@ -78,10 +79,32 @@ function unitsFor(dimension: Dimension): string[] {
  * it into that group, and dragging a heading moves only the heading — keeping it
  * one flat sortable list rather than nested ones.
  */
+/** The messages for one row, in the order they should be read. */
+type RowErrors = {
+  ingredientId?: { message?: string };
+  quantity?: { message?: string };
+  unit?: { message?: string };
+  note?: { message?: string };
+  heading?: { message?: string };
+};
+
+function messagesFor(rowErrors: RowErrors | undefined): string[] {
+  if (!rowErrors) return [];
+
+  return [
+    rowErrors.ingredientId?.message,
+    rowErrors.quantity?.message,
+    rowErrors.unit?.message,
+    rowErrors.note?.message,
+    rowErrors.heading?.message,
+  ].filter((message): message is string => Boolean(message));
+}
+
 export function IngredientEditor({
   control,
   register,
   setValue,
+  errors,
   allIngredients,
   supermarkets,
   assignmentsByIngredient,
@@ -89,6 +112,12 @@ export function IngredientEditor({
   control: Control<RecipeFormInput, unknown, RecipeFormInput>;
   register: UseFormRegister<RecipeFormInput>;
   setValue: UseFormSetValue<RecipeFormInput>;
+  /**
+   * Shown against the row that caused them. Without this an ingredient problem
+   * was invisible: the only message on the page was one line under the Save
+   * button, with nothing to say which of twenty rows it meant.
+   */
+  errors: FieldErrors<RecipeFormInput>;
   allIngredients: IngredientOption[];
   supermarkets: Supermarket[];
   /** Ingredient id to its assigned supermarket ids, for the row picker. */
@@ -162,6 +191,7 @@ export function IngredientEditor({
                     id={field.id}
                     index={index}
                     register={register}
+                    messages={messagesFor(errors.ingredients?.[index])}
                     onRemove={() => remove(index)}
                   />
                 ) : (
@@ -176,6 +206,7 @@ export function IngredientEditor({
                     onOptionCreated={rememberOption}
                     supermarkets={supermarkets}
                     assignmentsByIngredient={assignmentsByIngredient}
+                    messages={messagesFor(errors.ingredients?.[index])}
                     onRemove={() => remove(index)}
                   />
                 ),
@@ -222,11 +253,13 @@ function HeadingRow({
   id,
   index,
   register,
+  messages,
   onRemove,
 }: {
   id: string;
   index: number;
   register: UseFormRegister<RecipeFormInput>;
+  messages: string[];
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -269,6 +302,10 @@ function HeadingRow({
       >
         <X className="size-4" />
       </Button>
+
+      {messages.length > 0 && (
+        <p className="text-destructive w-full text-sm">{messages.join(" ")}</p>
+      )}
     </li>
   );
 }
@@ -283,6 +320,7 @@ function IngredientRow({
   onOptionCreated,
   supermarkets,
   assignmentsByIngredient,
+  messages,
   onRemove,
 }: {
   id: string;
@@ -294,6 +332,7 @@ function IngredientRow({
   onOptionCreated: (ingredient: IngredientOption) => void;
   supermarkets: Supermarket[];
   assignmentsByIngredient: Record<string, string[]>;
+  messages: string[];
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -430,6 +469,12 @@ function IngredientRow({
           {...register(`ingredients.${index}.note`)}
         />
       </div>
+
+      {messages.length > 0 && (
+        <p className="text-destructive mt-2 ml-6 text-sm">
+          {messages.join(" ")}
+        </p>
+      )}
     </li>
   );
 }

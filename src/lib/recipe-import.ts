@@ -221,7 +221,12 @@ function tidyIngredient(ingredient: ImportedRecipe["ingredients"][number]) {
     ...ingredient,
     name,
     quantity: ingredient.quantity,
-    unit: hasQuantity ? ingredient.unit : null,
+    // A quantity with no unit is the one pair the database refuses, and the
+    // model does produce it for a bare count it could not name ("2 limes").
+    // `piece` is what the prompt asks for in that case and what the editor
+    // renders as a plain number, so filling it in beats importing a row that
+    // cannot be saved.
+    unit: hasQuantity ? (ingredient.unit ?? "piece") : null,
     note: ingredient.note ? cleanText(ingredient.note).slice(0, 120) : null,
     groupName: ingredient.groupName ? cleanText(ingredient.groupName) : null,
   };

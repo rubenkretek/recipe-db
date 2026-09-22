@@ -108,7 +108,17 @@ export function toBase(
     return { quantity: null, unit: null };
   }
 
-  const definition = inputUnit ? UNITS[inputUnit] : undefined;
+  // Two different mistakes, and saying which one saves the caller guessing.
+  // A quantity with no unit is the likelier of the two: it is what an untouched
+  // unit picker leaves behind, and what the database's quantity/unit check
+  // constraint refuses.
+  if (inputUnit === null) {
+    throw new Error(
+      `A quantity of ${quantity} was given with no unit. Every quantity needs one, or leave the quantity empty to mean "to taste".`,
+    );
+  }
+
+  const definition = UNITS[inputUnit];
   if (!definition) {
     throw new Error(`Unknown unit: ${inputUnit}`);
   }

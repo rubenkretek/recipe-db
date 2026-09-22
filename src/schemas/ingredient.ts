@@ -128,11 +128,25 @@ export const recipeIngredientRowsSchema = z
   .default([])
   .superRefine((rows, context) => {
     rows.forEach((row, index) => {
-      if (row.kind === "ingredient" && !z.uuid().safeParse(row.ingredientId).success) {
+      if (row.kind !== "ingredient") return;
+
+      if (!z.uuid().safeParse(row.ingredientId).success) {
         context.addIssue({
           code: "custom",
           path: [index, "ingredientId"],
           message: "Pick an ingredient.",
+        });
+      }
+
+      // A quantity without a unit is the one combination the database refuses:
+      // `recipe_ingredients_quantity_unit_agree` requires both or neither.
+      // Caught here so it reads as a problem with this row, rather than
+      // escaping as "Unknown unit: null" from `toBase()` on save.
+      if (row.quantity !== null && row.unit === null) {
+        context.addIssue({
+          code: "custom",
+          path: [index, "unit"],
+          message: "Pick a unit, or clear the quantity to mean “to taste”.",
         });
       }
     });

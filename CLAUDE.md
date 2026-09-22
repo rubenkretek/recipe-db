@@ -90,6 +90,8 @@ Deliberately minimal. Only these four modules are tested, and they are pure func
 
 Do not add tests elsewhere without being asked. Do not add a test framework beyond Vitest.
 
+**Vitest only collects `src/lib/*.test.ts`** — `include` in `vitest.config.mts`, and a *single-level* glob. A test file anywhere else, `src/schemas/` or a subdirectory of `src/lib/` included, is collected by nothing: `vitest run <that file>` prints "No test files found", exits 1, and a careless reading of the output looks like a pass. It has already produced one false "verified". Any throwaway harness has to sit directly in `src/lib/`, and anything claiming to have run needs its test count checked.
+
 ---
 
 ## Working process

@@ -54,6 +54,9 @@ describe("toBase", () => {
   it("refuses a unit it does not know rather than guessing", () => {
     // SPEC.md §6.1: no fuzzy matching. The editor asks rather than guessing.
     expect(() => toBase(1, "handful")).toThrow(/unknown unit/i);
+    // A missing unit says so specifically: it is what an untouched unit picker
+    // leaves behind, and "Unknown unit: null" told nobody anything.
+    expect(() => toBase(1, null)).toThrow(/no unit/i);
   });
 
   it("offers every input unit from the spec, and no base-only duplicates", () => {
