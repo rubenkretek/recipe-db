@@ -13,11 +13,12 @@ import { createClient } from "@/lib/supabase/server";
  * How long a signed URL stays valid, and how long we reuse one before minting
  * a replacement.
  *
- * The gap between the two matters: a URL handed out at the very end of its
- * cache window still has ten minutes of life left, so nothing is ever served an
- * already-expired link.
+ * The gap between the two is the safety margin: a URL handed out at the very
+ * end of its reuse window still has over an hour of life left. What makes that
+ * true is the window in the cache key below — `revalidate` alone does NOT
+ * bound the age of what gets served.
  */
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
+const SIGNED_URL_TTL_SECONDS = 2 * 60 * 60;
 const SIGNED_URL_CACHE_SECONDS = 50 * 60;
 
 /**
@@ -52,6 +53,25 @@ export async function signedUrlsFor(
   // photos to sign.
   const supabase = await createClient();
 
+  // The hard expiry `revalidate` cannot provide.
+  //
+  // `unstable_cache` is stale-while-revalidate: once past `revalidate` it still
+  // SERVES the stale value and refreshes in the background. For data that
+  // merely goes out of date that is ideal; for a credential with an expiry it
+  // is a bug. An entry nobody had requested for two days was handed out two
+  // days old — a URL that had expired 49 hours earlier, which storage answered
+  // with a 400 and the page rendered as a missing image. Refreshing appeared to
+  // fix it only because the refresh got what the background revalidation had
+  // just written.
+  //
+  // Bucketing the clock into the key gives a genuine miss at each boundary, so
+  // what is served is never older than one window and always has
+  // TTL - CACHE seconds of life left. `revalidate` is kept so abandoned buckets
+  // do not sit in the cache forever.
+  const cacheWindow = Math.floor(
+    Date.now() / (SIGNED_URL_CACHE_SECONDS * 1000),
+  );
+
   const load = unstable_cache(
     async () => {
       const { data, error } = await supabase.storage
@@ -73,7 +93,7 @@ export async function signedUrlsFor(
     // id. A cached URL therefore cannot leak across kitchens: a member of one
     // kitchen never asks to sign a path belonging to another, because the paths
     // come from rows RLS already filtered.
-    ["recipe-photo-signed-urls", ...paths],
+    ["recipe-photo-signed-urls", String(cacheWindow), ...paths],
     { revalidate: SIGNED_URL_CACHE_SECONDS },
   );
 
