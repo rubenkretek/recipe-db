@@ -926,7 +926,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      complete_meal_plan: { Args: { plan_id: string }; Returns: string }
+      complete_meal_plan: {
+        Args: { carry_item_ids?: string[]; plan_id: string }
+        Returns: string
+      }
       create_invite: { Args: { target_kitchen_id: string }; Returns: string }
       create_kitchen: { Args: { kitchen_name: string }; Returns: string }
       is_kitchen_member: { Args: { k: string }; Returns: boolean }

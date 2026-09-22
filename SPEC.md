@@ -761,7 +761,7 @@ When a plan is marked complete, in a single transaction:
 2. Set the current `shopping_lists.status = 'archived'`.
 3. Create a new `meal_plans` row with `status = 'active'`, `starts_on = current_date`.
 4. Create a new `shopping_lists` row with `status = 'active'`, linked to the new plan.
-5. Copy every **unchecked** item to the new list, along with its supermarket assignments. A straight copy: quantity, unit, name.
+5. Copy the **unchecked** items the household chose to the new list, along with their supermarket assignments. A straight copy: quantity, unit, name. *(Amended 2026-09-22: originally every unchecked item. Completing now asks which ones, all ticked by default, because a list accumulates things you thought better of and the only way to drop one was to go back and delete it first. The selection is a parameter on `complete_meal_plan`, not a delete before calling it, so the swap stays atomic. Unticked items are **not deleted** — they stay on the old list as it moves to history.)*
 6. Checked items stay on the archived list, which is kept read-only for history.
 
 Implement steps 1 to 6 as a single Postgres function called via RPC, so a dropped connection cannot leave a kitchen with two active plans or none.
@@ -806,11 +806,13 @@ something is added — so steps 2 and 5 are conditional.
 
 ### Shopping screen detail
 
-- Top-level control is a horizontal row of supermarket chips plus an "All" chip. Selecting one filters to items assigned to that supermarket.
+- Top-level control is a horizontal row of supermarket chips plus an "All" chip. Selecting one filters to items assigned to that supermarket. Each chip carries its shop's colour (§5.5): full strength when selected, a light wash of the same hue when not. The label colour is computed from the shop's luminance, because the household picks these hex codes by hand and dark text on a dark chip is unreadable.
 - Unchecked items first. Checked items collapse into a "Got it (N)" section at the bottom, struck through, showing who ticked them and when.
 - Tap anywhere on the row to toggle. Large tap target, roughly 56px tall.
 - Long-press or a trailing menu for edit quantity, change supermarkets, delete.
 - **Copy to clipboard**: copies the currently visible unchecked items, one per line, formatted as `2kg potatoes`. If "All" is selected, group under supermarket headings with a blank line between groups, mirroring the Google Keep format.
+- **The add box files the item under whichever chip is showing.** Typing "birthday candles" while looking at Aldi means you intend to buy it in Aldi; landing it under "Unassigned" would mean going and filing it by hand. Under "All" and "Unassigned" no shop is implied and none is set. The placeholder names the shop so this is visible before you type.
+- **Enter adds the item and the cursor stays put**, so a run of items is one continuous piece of typing rather than reaching for the box again between each.
 - **Clear list**: destructive, confirmation dialog, deletes every item on the active list.
 
 ### Ingredients screen detail
@@ -1023,9 +1025,18 @@ Next.js + TypeScript + Tailwind + shadcn, a Supabase project, `.env.example`, `o
   outcome, and the later real write still wins.
 - **`shopping_list_items` had to be added to the `supabase_realtime`
   publication.** The publication existed but contained no tables, so Postgres
-  Changes emitted nothing at all. `replica identity` is left at its default: only
-  the *new* row is read, and the docs note that with RLS on, `old` carries just
-  primary keys anyway.
+  Changes emitted nothing at all.
+- **`replica identity` is `full` on `shopping_list_items`.** *(Corrected
+  2026-09-22. It was left at the default on the reasoning that only the new row
+  is read and that with RLS on, `old` carries just primary keys anyway.)* That
+  missed what a **filtered** subscription needs. The screen subscribes with
+  `filter: shopping_list_id=eq.<id>`, and under the default identity a DELETE
+  writes only the primary key, so its payload has no `shopping_list_id` and the
+  filter can never match it — deletes reached nobody. Ticks and quantity edits
+  were fine throughout, because an UPDATE carries the whole new row, which is
+  why the symptom looked like "only deleting needs a refresh". The cost of
+  `full` is the old row in the WAL on every update, which is nothing on a
+  household list of tens of narrow rows.
 - **Realtime invalidates the cache rather than patching it.** A Postgres Changes
   payload is the raw row with none of its embedded relations, so a tick would
   arrive without the ingredient's name or the ticker's display name. Refetching a

@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { describePlanPeriod } from "@/lib/plan-dates";
 import { getActivePlan } from "@/lib/plans";
 import { listRecipes } from "@/lib/recipes";
+import { getActiveShoppingList } from "@/lib/shopping";
+import { formatItemLine } from "@/lib/shopping-format";
 
 /**
  * The active meal plan. SPEC.md §7 and §8 Phase 6.
@@ -21,7 +23,17 @@ import { listRecipes } from "@/lib/recipes";
  * it, arrive in Phase 7 with the shopping list.
  */
 export default async function PlanPage() {
-  const [plan, recipes] = await Promise.all([getActivePlan(), listRecipes()]);
+  const [plan, recipes, list] = await Promise.all([
+    getActivePlan(),
+    listRecipes(),
+    // For the carry-over confirmation: completing a plan copies unticked items
+    // onto the next list, and which ones is now a choice. SPEC.md §6.4 step 5.
+    getActiveShoppingList(),
+  ]);
+
+  const carryCandidates = (list?.items ?? [])
+    .filter((item) => !item.isChecked)
+    .map((item) => ({ id: item.id, label: formatItemLine(item) }));
 
   // Null is a real state, not an error: completing a plan creates the next one,
   // so a kitchen only ever starts one by hand once.
@@ -60,6 +72,7 @@ export default async function PlanPage() {
               planId={plan.id}
               recipeCount={plan.recipes.length}
               cookedCount={cookedCount}
+              carryCandidates={carryCandidates}
             />
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { ClipboardCopy, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ConnectionIndicator } from "@/components/shopping/connection-indicator";
@@ -29,6 +29,7 @@ import {
   shoppingListText,
   type ShoppingItem,
 } from "@/lib/shopping-format";
+import { readableTextOn, tintFor } from "@/lib/supermarket-colour";
 import type { Supermarket } from "@/lib/supermarkets";
 import { addManualItem, clearList } from "@/server/actions/shopping";
 
@@ -53,7 +54,7 @@ export function ShoppingScreen({
 }) {
   const [selected, setSelected] = useState<string>(ALL_SUPERMARKETS);
 
-  const { items, connection, pendingCount, toggle } = useShoppingList({
+  const { items, connection, pendingCount, toggle, refresh } = useShoppingList({
     listId,
     initialItems,
   });
@@ -150,6 +151,7 @@ export function ShoppingScreen({
                       item={item}
                       supermarkets={supermarkets}
                       onToggle={() => toggle(item)}
+                      onChanged={refresh}
                     />
                   ))}
                 </ul>
@@ -169,6 +171,7 @@ export function ShoppingScreen({
                     item={item}
                     supermarkets={supermarkets}
                     onToggle={() => toggle(item)}
+                    onChanged={refresh}
                   />
                 ))}
               </ul>
@@ -177,7 +180,11 @@ export function ShoppingScreen({
         </div>
       )}
 
-      <ManualItemForm />
+      <ManualItemForm
+        selected={selected}
+        supermarkets={supermarkets}
+        onAdded={refresh}
+      />
     </div>
   );
 }
@@ -201,31 +208,59 @@ function SupermarketChips({
   selected: string;
   onSelect: (value: string) => void;
 }) {
-  const chips = [
-    { value: ALL_SUPERMARKETS, label: "All" },
-    ...supermarkets.map((one) => ({ value: one.id, label: one.name })),
+  const chips: { value: string; label: string; colour: string | null }[] = [
+    { value: ALL_SUPERMARKETS, label: "All", colour: null },
+    ...supermarkets.map((one) => ({
+      value: one.id,
+      label: one.name,
+      colour: one.colour,
+    })),
     ...(hasUnassigned
-      ? [{ value: UNASSIGNED_GROUP, label: UNASSIGNED_GROUP }]
+      ? [{ value: UNASSIGNED_GROUP, label: UNASSIGNED_GROUP, colour: null }]
       : []),
   ];
 
   return (
     <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
-      {chips.map((chip) => (
-        <button
-          key={chip.value}
-          type="button"
-          aria-pressed={selected === chip.value}
-          onClick={() => onSelect(chip.value)}
-          className={
-            selected === chip.value
-              ? "bg-primary text-primary-foreground shrink-0 rounded-full px-3.5 py-1.5 text-sm"
-              : "shrink-0 rounded-full border px-3.5 py-1.5 text-sm"
-          }
-        >
-          {chip.label}
-        </button>
-      ))}
+      {chips.map((chip) => {
+        const isSelected = selected === chip.value;
+
+        // A selected chip is the shop's colour at full strength, which is the
+        // only strength whose contrast can be calculated — a tint is
+        // transparent, so what shows through it is the page, not the colour.
+        // Unselected keeps the normal text on a light wash of the same hue.
+        const style = chip.colour
+          ? isSelected
+            ? {
+                backgroundColor: chip.colour,
+                borderColor: chip.colour,
+                color: readableTextOn(chip.colour),
+              }
+            : {
+                backgroundColor: tintFor(chip.colour, 25),
+                borderColor: tintFor(chip.colour, 60),
+              }
+          : undefined;
+
+        return (
+          <button
+            key={chip.value}
+            type="button"
+            aria-pressed={isSelected}
+            onClick={() => onSelect(chip.value)}
+            style={style}
+            className={
+              chip.colour
+                ? "shrink-0 rounded-full border px-3.5 py-1.5 text-sm"
+                : isSelected
+                  ? "bg-primary text-primary-foreground shrink-0 rounded-full px-3.5 py-1.5 text-sm"
+                  : "shrink-0 rounded-full border px-3.5 py-1.5 text-sm"
+            }
+          >
+            {chip.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -289,10 +324,24 @@ function ClearListButton({ itemCount }: { itemCount: number }) {
  * Free-text items have no quantity and no unit, and never merge into anything:
  * two lines both reading "birthday candles" are not obviously the same thing.
  */
-function ManualItemForm() {
+function ManualItemForm({
+  selected,
+  supermarkets,
+  onAdded,
+}: {
+  /** The chip currently showing, which is the shop the item is filed under. */
+  selected: string;
+  supermarkets: Supermarket[];
+  /** Refetches the live list, which does not re-read props after mount. */
+  onAdded: () => void;
+}) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [isPending, startTransition] = useTransition();
+  const input = useRef<HTMLInputElement>(null);
+
+  // Null under "All" and "Unassigned": neither implies a shop.
+  const shop = supermarkets.find((one) => one.id === selected) ?? null;
 
   return (
     <form
@@ -304,21 +353,36 @@ function ManualItemForm() {
         if (!name.trim()) return;
 
         startTransition(async () => {
-          const result = await addManualItem({ name });
+          const result = await addManualItem({
+            name,
+            supermarketId: shop?.id ?? null,
+          });
           if (result?.error) {
             toast.error(result.error);
             return;
           }
           setName("");
+          onAdded();
           router.refresh();
+          // Enter submits, because this is a form; keeping the cursor here is
+          // what makes a run of items one continuous piece of typing rather
+          // than reaching for the box again between each.
+          input.current?.focus();
         });
       }}
     >
       <Input
+        ref={input}
         value={name}
         onChange={(event) => setName(event.target.value)}
-        placeholder="Add anything else"
-        aria-label="New item"
+        placeholder={shop ? `Add anything else to ${shop.name}` : "Add anything else"}
+        aria-label={shop ? `New item for ${shop.name}` : "New item"}
+        // No autoComplete or enterKeyHint here. React renders both with their
+        // camelCase spelling intact on the server — it does not treat them as
+        // known attributes — and then does not reproduce them on the client,
+        // which is a hydration mismatch on every load of this page. They were
+        // only ever polish; Enter submitting and the cursor staying put are
+        // the form and the ref, neither of which needs them.
       />
       <Button type="submit" variant="secondary" disabled={isPending}>
         <Plus className="size-4" />

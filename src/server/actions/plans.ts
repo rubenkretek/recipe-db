@@ -6,6 +6,7 @@ import { requireKitchenContext } from "@/lib/kitchen";
 import { createClient } from "@/lib/supabase/server";
 import {
   addRecipeToPlanSchema,
+  completePlanSchema,
   planIdSchema,
   plannedRecipeIdSchema,
   renamePlanSchema,
@@ -307,11 +308,15 @@ export async function renamePlan(input: unknown): Promise<ActionError | void> {
  * Goes through the `complete_meal_plan` RPC rather than two statements from
  * here, because SPEC.md §6.4 requires the swap to be atomic: a dropped
  * connection between the update and the insert would leave the kitchen with no
- * active plan at all. The function grows to archive the shopping list and carry
- * unchecked items over in Phase 7.
+ * active plan at all. The function archives the shopping list and carries
+ * unchecked items over as part of the same transaction.
+ *
+ * Which items carry is the caller's choice, and it is passed *into* the
+ * function for that same reason — deleting the unwanted ones here and then
+ * completing would be two round trips with a window between them.
  */
 export async function completePlan(input: unknown): Promise<ActionError | void> {
-  const parsed = planIdSchema.safeParse(input);
+  const parsed = completePlanSchema.safeParse(input);
   if (!parsed.success) {
     return { error: "Unknown plan." };
   }
@@ -321,6 +326,11 @@ export async function completePlan(input: unknown): Promise<ActionError | void> 
 
   const { error } = await supabase.rpc("complete_meal_plan", {
     plan_id: parsed.data.planId,
+    // Undefined leaves the argument off entirely, which is how the function is
+    // told to carry everything. An empty array is the opposite instruction —
+    // carry nothing — so it has to survive rather than be collapsed into the
+    // same falsy case.
+    carry_item_ids: parsed.data.carryItemIds ?? undefined,
   });
 
   if (error) {

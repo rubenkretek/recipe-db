@@ -53,10 +53,19 @@ export function ShoppingItemRow({
   item,
   supermarkets,
   onToggle,
+  onChanged,
 }: {
   item: ShoppingItem;
   supermarkets: Supermarket[];
   onToggle: () => void;
+  /**
+   * Called after a change made through a server action.
+   *
+   * Ticking writes to the live cache itself, but deleting, editing a quantity
+   * and changing shops all go through server actions, which revalidate the
+   * server route and not the cache these rows are rendered from.
+   */
+  onChanged: () => void;
 }) {
   const [editingQuantity, setEditingQuantity] = useState(false);
   const [editingSupermarkets, setEditingSupermarkets] = useState(false);
@@ -127,7 +136,14 @@ export function ShoppingItemRow({
             variant="destructive"
             onSelect={() => {
               void deleteItem({ itemId: item.id }).then((result) => {
-                if (result?.error) toast.error(result.error);
+                if (result?.error) {
+                  toast.error(result.error);
+                  return;
+                }
+                // A delete never arrives over Realtime: the subscription is
+                // filtered on shopping_list_id, and a DELETE payload carries
+                // only the primary key, so the filter cannot match it.
+                onChanged();
               });
             }}
           >
@@ -141,12 +157,14 @@ export function ShoppingItemRow({
         item={item}
         open={editingQuantity}
         onClose={() => setEditingQuantity(false)}
+        onSaved={onChanged}
       />
       <SupermarketsDialog
         item={item}
         supermarkets={supermarkets}
         open={editingSupermarkets}
         onClose={() => setEditingSupermarkets(false)}
+        onSaved={onChanged}
       />
     </li>
   );
@@ -163,10 +181,12 @@ function QuantityDialog({
   item,
   open,
   onClose,
+  onSaved,
 }: {
   item: ShoppingItem;
   open: boolean;
   onClose: () => void;
+  onSaved: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [quantity, setQuantity] = useState(
@@ -231,6 +251,7 @@ function QuantityDialog({
                   toast.error(result.error);
                   return;
                 }
+                onSaved();
                 onClose();
               })
             }
@@ -256,11 +277,13 @@ function SupermarketsDialog({
   supermarkets,
   open,
   onClose,
+  onSaved,
 }: {
   item: ShoppingItem;
   supermarkets: Supermarket[];
   open: boolean;
   onClose: () => void;
+  onSaved: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<string[]>(item.supermarketIds);
@@ -325,6 +348,7 @@ function SupermarketsDialog({
                   toast.error(result.error);
                   return;
                 }
+                onSaved();
                 onClose();
               })
             }

@@ -419,14 +419,35 @@ export async function addManualItem(
     return list;
   }
 
-  const { error } = await supabase.from("shopping_list_items").insert({
-    kitchen_id: active.id,
-    shopping_list_id: list.listId,
-    manual_name: parsed.data.name,
-  });
+  const { data: created, error } = await supabase
+    .from("shopping_list_items")
+    .insert({
+      kitchen_id: active.id,
+      shopping_list_id: list.listId,
+      manual_name: parsed.data.name,
+    })
+    .select("id")
+    .single();
 
-  if (error) {
-    return { error: error.message };
+  if (error || !created) {
+    return { error: error?.message ?? "Could not add that item." };
+  }
+
+  // Filed under whichever shop the list was filtered to. No membership check is
+  // needed: the composite foreign key on (supermarket_id, kitchen_id) refuses a
+  // shop belonging to another kitchen outright. See CLAUDE.md "Multi-tenancy".
+  if (parsed.data.supermarketId) {
+    const { error: linkError } = await supabase
+      .from("shopping_list_item_supermarkets")
+      .insert({
+        kitchen_id: active.id,
+        item_id: created.id,
+        supermarket_id: parsed.data.supermarketId,
+      });
+
+    if (linkError) {
+      return { error: linkError.message };
+    }
   }
 
   revalidateShoppingViews();

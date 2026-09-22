@@ -46,6 +46,15 @@ export const addManualItemSchema = z.object({
     .trim()
     .min(1, "Give the item a name.")
     .max(200, "That name is too long."),
+  /**
+   * The shop the list was filtered to when this was typed.
+   *
+   * Adding "birthday candles" while looking at Aldi means you intend to buy it
+   * in Aldi, and an item that lands under "Unassigned" instead is one you have
+   * to go and file by hand. Null under "All" and "Unassigned", where no shop
+   * was implied.
+   */
+  supermarketId: z.uuid().nullable().default(null),
 });
 
 /**

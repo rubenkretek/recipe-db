@@ -34,6 +34,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ManagedIngredient } from "@/lib/ingredients";
+import {
+  ASSIGNED_TINT,
+  UNASSIGNED_TINT,
+  tintFor,
+} from "@/lib/supermarket-colour";
 import type { Supermarket } from "@/lib/supermarkets";
 import { INPUT_UNITS } from "@/lib/units";
 import {
@@ -45,30 +50,6 @@ import { setIngredientSupermarkets } from "@/server/actions/supermarkets";
 
 /** Sentinel for "no default unit", since a Select item cannot have an empty value. */
 const NO_UNIT = "none";
-
-/**
- * How strongly a shop's colour tints its column.
- *
- * Both states are tinted, so a column reads as one shop at a glance; the
- * difference in strength is what says whether the ingredient is sold there. The
- * tick is the unambiguous signal — the tint alone would be unreadable to anyone
- * who cannot separate the two shades.
- */
-const ASSIGNED_TINT = 80;
-const UNASSIGNED_TINT = 50;
-
-/**
- * A shop's colour at the given strength, or undefined when it has none.
- *
- * `color-mix` rather than parsing the hex into rgba: the browser does the
- * arithmetic, and undefined leaves the cell with no inline background at all,
- * which is what a colourless shop has to fall back to. A shop without a colour
- * is a supported state, not a missing value — see the migration.
- */
-function tintFor(colour: string | null, percent: number): string | undefined {
-  if (!colour) return undefined;
-  return `color-mix(in srgb, ${colour} ${percent}%, transparent)`;
-}
 
 /**
  * The kitchen's ingredients as a grid: ingredients down, supermarkets across.

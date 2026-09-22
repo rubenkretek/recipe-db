@@ -17,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { UNNAMED_PLAN } from "@/lib/plan-dates";
 import { completePlan, renamePlan, startPlan } from "@/server/actions/plans";
@@ -112,25 +113,43 @@ export function CompletePlanButton({
   planId,
   recipeCount,
   cookedCount,
+  carryCandidates,
 }: {
   planId: string;
   recipeCount: number;
   cookedCount: number;
+  /**
+   * Unticked items on the current shopping list, offered for carrying over.
+   *
+   * Ticked items never carry: you have already bought them. SPEC.md §6.4.
+   */
+  carryCandidates: { id: string; label: string }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [carry, setCarry] = useState<string[]>([]);
 
   const uncooked = recipeCount - cookedCount;
+  const allTicked = carry.length === carryCandidates.length;
 
   return (
-    <AlertDialog>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        // Everything ticked each time it opens, so the default is the old
+        // behaviour of carrying the lot and unticking is the deliberate act.
+        if (next) setCarry(carryCandidates.map((item) => item.id));
+      }}
+    >
       <AlertDialogTrigger asChild>
         <Button variant="secondary">
           <Flag className="size-4" />
           Complete
         </Button>
       </AlertDialogTrigger>
-      <AlertDialogContent>
+      <AlertDialogContent className="max-h-[85vh] overflow-y-auto">
         <AlertDialogHeader>
           <AlertDialogTitle>Complete this plan?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -143,6 +162,58 @@ export function CompletePlanButton({
                   } not ticked as cooked. This plan moves to history either way, and a new empty one starts.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
+
+        {carryCandidates.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">
+                Still to buy ({carry.length} of {carryCandidates.length})
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setCarry(
+                    allTicked ? [] : carryCandidates.map((item) => item.id),
+                  )
+                }
+              >
+                {allTicked ? "Untick all" : "Tick all"}
+              </Button>
+            </div>
+
+            <ul className="max-h-56 overflow-y-auto rounded-lg border">
+              {carryCandidates.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0"
+                >
+                  <Checkbox
+                    id={`carry-${item.id}`}
+                    checked={carry.includes(item.id)}
+                    onCheckedChange={() =>
+                      setCarry((current) =>
+                        current.includes(item.id)
+                          ? current.filter((id) => id !== item.id)
+                          : [...current, item.id],
+                      )
+                    }
+                  />
+                  <label htmlFor={`carry-${item.id}`} className="text-sm">
+                    {item.label}
+                  </label>
+                </li>
+              ))}
+            </ul>
+
+            <p className="text-muted-foreground text-xs">
+              Unticked items stay on the old list, which moves to history with
+              the plan. Nothing is deleted.
+            </p>
+          </div>
+        )}
+
         <AlertDialogFooter>
           <AlertDialogCancel>Keep planning</AlertDialogCancel>
           <AlertDialogAction
@@ -150,11 +221,17 @@ export function CompletePlanButton({
             onClick={(event) => {
               event.preventDefault();
               startTransition(async () => {
-                const result = await completePlan({ planId });
+                const result = await completePlan({
+                  planId,
+                  // Null only when there was nothing to choose between, which
+                  // keeps "carry everything" as the meaning of null.
+                  carryItemIds: carryCandidates.length > 0 ? carry : null,
+                });
                 if (result?.error) {
                   toast.error(result.error);
                 } else {
                   toast.success("Plan completed. A new one has started.");
+                  setOpen(false);
                   router.refresh();
                 }
               });

@@ -1,0 +1,19 @@
+-- Make DELETE events reach the other phone.
+-- Added 2026-09-22.
+--
+-- The shopping screen subscribes with `filter: shopping_list_id=eq.<id>`. Under
+-- the default replica identity a DELETE writes only the primary key to the WAL,
+-- so its payload carries no `shopping_list_id` and that filter can never match
+-- it. Deletes were therefore never delivered to any subscriber at all. Ticks
+-- and quantity edits were unaffected, because an UPDATE carries the whole new
+-- row — which is exactly why only deleting an item appeared to need a refresh.
+--
+-- SPEC.md §8 Phase 8 decision 5 chose the default, reasoning that `full` is
+-- only needed to receive the OLD row on updates and nothing reads it. True, and
+-- beside the point: a *filtered* subscription needs the old row to decide
+-- whether a delete belongs to it in the first place.
+--
+-- The cost is that every UPDATE now writes the old row to the WAL as well. On a
+-- household shopping list of tens of narrow rows that is nothing. It would be
+-- worth reconsidering on a wide table or one under heavy write traffic.
+alter table public.shopping_list_items replica identity full;

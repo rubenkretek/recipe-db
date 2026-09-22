@@ -52,6 +52,23 @@ export const planIdSchema = z.object({
 });
 
 /**
+ * Completing a plan, and which unchecked items come with it.
+ *
+ * `carryItemIds` null means "carry everything", which is what completing a plan
+ * did before there was a choice — so an older client, or any caller that does
+ * not care, behaves exactly as before. An empty array means "carry nothing" and
+ * is a real selection rather than a missing one, which is why the two cannot be
+ * collapsed into one falsy case.
+ *
+ * Anything left unticked stays on the old list as it moves to history. Nothing
+ * is deleted by completing a plan.
+ */
+export const completePlanSchema = z.object({
+  planId: z.uuid(),
+  carryItemIds: z.array(z.uuid()).nullable().default(null),
+});
+
+/**
  * Naming a plan.
  *
  * Optional throughout: an unnamed plan renders as "Current plan", and clearing

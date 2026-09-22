@@ -34,6 +34,16 @@ export type ShoppingListState = {
   /** How many ticks are waiting to reach the server. */
   pendingCount: number;
   toggle: (item: ShoppingItem) => void;
+  /**
+   * Refetches the list now.
+   *
+   * For the mutations that still go through a server action — delete, edit a
+   * quantity, change an item's shops. Those revalidate the *server* route, but
+   * the rows on screen come from this cache, which is seeded from props once on
+   * mount and never re-reads them. Without this a delete stays on screen until
+   * a full page load.
+   */
+  refresh: () => void;
 };
 
 /** Subscribes to the browser's own connectivity events. */
@@ -294,11 +304,15 @@ export function useShoppingList({
     [queryClient, queryKey, supabase],
   );
 
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
+
   const connection: ConnectionState = isSyncing
     ? "syncing"
     : isOnline
       ? "online"
       : "offline";
 
-  return { items, connection, pendingCount, toggle };
+  return { items, connection, pendingCount, toggle, refresh };
 }
