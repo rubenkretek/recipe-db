@@ -91,15 +91,15 @@ export function ShoppingScreen({
           size="sm"
           disabled={unchecked.length === 0}
           onClick={() => {
-            const text = shoppingListText(
-              items,
-              supermarkets,
-              selected,
-            );
+            const text = shoppingListText(items, selected);
+            const lines = text === "" ? 0 : text.split("\n").length;
             // The clipboard API needs a secure context and can be refused
             // outright. Failing silently would look like the button is broken.
             navigator.clipboard.writeText(text).then(
-              () => toast.success("Copied."),
+              () =>
+                toast.success(
+                  `Copied ${lines} ${lines === 1 ? "name" : "names"}.`,
+                ),
               () => toast.error("Could not reach the clipboard."),
             );
           }}

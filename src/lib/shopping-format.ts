@@ -170,28 +170,27 @@ export function filterBySupermarket(
 /**
  * The clipboard text for what is currently on screen. SPEC.md §7.
  *
- * Unchecked items only — a list of things you have already bought is no use to
- * anyone. Under a single supermarket it is one item per line; under "All" the
- * lines are grouped under supermarket headings with a blank line between,
- * mirroring both the screen and the Google Keep note this replaces. An item in
- * two shops appears under both headings, for the same reason it does on screen.
+ * **Names only, one per line.** No quantities and no supermarket headings,
+ * because this is pasted into an online shop's bulk-add box: "2kg potatoes"
+ * searches for a product called "2kg potatoes", and a heading searches for a
+ * product called "Aldi". Filter to a shop first and the list is that shop's
+ * order, ready to paste.
+ *
+ * Unchecked items only — a list of things already in the trolley is no use to
+ * anyone. Names are deduplicated: two lines that say "milk" are one thing to
+ * buy, and the screen still shows both.
+ *
+ * *(Changed 2026-09-22. It previously wrote `2kg potatoes` and, under "All",
+ * grouped the lines under supermarket headings to mirror the Google Keep note
+ * this replaced. Both are wrong for the target that actually gets pasted into.)*
  */
 export function shoppingListText(
   items: ShoppingItem[],
-  supermarkets: { id: string; name: string }[],
   selectedSupermarketId: string,
 ): string {
-  const unchecked = items.filter((item) => !item.isChecked);
+  const names = filterBySupermarket(items, selectedSupermarketId)
+    .filter((item) => !item.isChecked)
+    .map((item) => item.name);
 
-  if (selectedSupermarketId !== ALL_SUPERMARKETS) {
-    return filterBySupermarket(unchecked, selectedSupermarketId)
-      .map(formatItemLine)
-      .join("\n");
-  }
-
-  return groupItemsBySupermarket(unchecked, supermarkets)
-    .map((group) =>
-      [group.name, ...group.items.map(formatItemLine)].join("\n"),
-    )
-    .join("\n\n");
+  return [...new Set(names)].join("\n");
 }
