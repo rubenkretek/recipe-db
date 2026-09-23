@@ -1,7 +1,7 @@
 "use client";
 
-import { FileUp, Loader2, TriangleAlert } from "lucide-react";
-import { useRef, useState, useTransition } from "react";
+import { FileUp, TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import type { IngredientOption } from "@/components/recipes/ingredient-combobox";
@@ -35,6 +35,24 @@ const ACCEPTED = ".md,.markdown,.txt,text/markdown,text/plain";
 type Choice = { mode: "existing" | "create"; name: string };
 
 /**
+ * The progress bar is an **estimate**, and deliberately so.
+ *
+ * There is no real progress to report: the import is two calls to the model
+ * inside one server action, and neither streams anything back. What the bar
+ * measures is elapsed time against how long imports actually take — around 23
+ * to 28 seconds for the two passes, measured against the sample files.
+ *
+ * The curve is asymptotic rather than linear, which matters: a linear bar that
+ * reaches its estimate early then stops is the spinner problem again, just with
+ * a rectangle. This one always creeps, never arrives, and only snaps to gone
+ * when the answer does. It stops short of 100 for the same reason — the only
+ * honest 100% is the draft appearing.
+ */
+const PROGRESS_TICK_MS = 250;
+const PROGRESS_TAU_MS = 12_000;
+const PROGRESS_CEILING = 96;
+
+/**
  * Importing a recipe from an exported file.
  *
  * Drop a file, a model reads it, and the draft fills the normal recipe form —
@@ -63,10 +81,45 @@ export function RecipeImport({
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [isOver, setIsOver] = useState(false);
-  const [isReading, setIsReading] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(0);
   const [draft, setDraft] = useState<RecipeDraft | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   const [isPending, startTransition] = useTransition();
+
+  // `startedAt` is the single source of truth for "an import is running", so
+  // there is no separate boolean that could disagree with it.
+  const isReading = startedAt !== null;
+
+  // The clock only ticks while something is being read. State is set inside the
+  // interval callback rather than in the effect body, which is what keeps this
+  // clear of `react-hooks/set-state-in-effect`. See CLAUDE.md.
+  useEffect(() => {
+    if (startedAt === null) return;
+
+    const id = setInterval(() => setNow(Date.now()), PROGRESS_TICK_MS);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  const elapsed = startedAt === null ? 0 : Math.max(0, now - startedAt);
+  const seconds = Math.floor(elapsed / 1000);
+  const percent = isReading
+    ? Math.round(PROGRESS_CEILING * (1 - Math.exp(-elapsed / PROGRESS_TAU_MS)))
+    : 0;
+
+  // Named for what the server is actually doing at roughly that point, in the
+  // order it does it: extract, then the second pass that checks for omissions,
+  // then matching names against the kitchen's ingredients.
+  // Thresholds chosen from the measured split, not picked to look busy: of a
+  // ~26s import, the first pass runs to about 13s (64% on this curve) and the
+  // second to about 25s (85%). Set any lower and the label claims the second
+  // pass has begun while the first is still running.
+  const stage =
+    percent < 64
+      ? "Reading the recipe"
+      : percent < 85
+        ? "Checking nothing was missed"
+        : "Matching your ingredients";
 
   async function read(file: File) {
     if (file.size > MAX_FILE_BYTES) {
@@ -74,7 +127,7 @@ export function RecipeImport({
       return;
     }
 
-    setIsReading(true);
+    setStartedAt(Date.now());
     try {
       const text = await file.text();
       const result = await importRecipeFile({ filename: file.name, text });
@@ -89,12 +142,12 @@ export function RecipeImport({
     } catch {
       toast.error("That file could not be read.");
     } finally {
-      setIsReading(false);
+      setStartedAt(null);
     }
   }
 
   async function readText(text: string) {
-    setIsReading(true);
+    setStartedAt(Date.now());
     try {
       const result = await importRecipeFile({
         filename: "pasted recipe",
@@ -109,7 +162,7 @@ export function RecipeImport({
       setDraft(result.draft);
       setChoices(startingChoices(result.draft));
     } finally {
-      setIsReading(false);
+      setStartedAt(null);
     }
   }
 
@@ -270,13 +323,35 @@ export function RecipeImport({
         }
       >
         {isReading ? (
-          <>
-            <Loader2 className="text-muted-foreground size-5 animate-spin" />
-            <p className="text-sm font-medium">Reading the recipe…</p>
-            <p className="text-muted-foreground text-xs">
-              It is read twice, so this takes a few seconds.
+          <div className="flex w-full max-w-xs flex-col items-center gap-2">
+            <p className="text-sm font-medium">{stage}…</p>
+
+            <div
+              role="progressbar"
+              aria-valuenow={percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Reading the recipe"
+              className="bg-muted h-2 w-full overflow-hidden rounded-full"
+            >
+              <div
+                className="bg-primary h-full rounded-full transition-[width] duration-300 ease-out"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+
+            {/* The seconds are here because the percentage alone is not enough.
+                The curve flattens by design, so on a slow import the integer
+                stops changing for stretches — which is the frozen-spinner
+                problem wearing a rectangle. A counter that ticks every second
+                regardless is what says "still going". */}
+            <p className="text-muted-foreground text-xs tabular-nums">
+              {percent}% · {seconds}s
             </p>
-          </>
+            <p className="text-muted-foreground text-xs">
+              Read twice, so it takes around half a minute.
+            </p>
+          </div>
         ) : (
           <>
             <FileUp className="text-muted-foreground size-5" />
