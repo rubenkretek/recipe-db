@@ -15,6 +15,27 @@ export const metadata: Metadata = {
   // Makes the app installable. SPEC.md §8 Phase 8.
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Recipes", statusBarStyle: "default" },
+  /**
+   * Declared explicitly, because only `/favicon.ico` is auto-discovered.
+   *
+   * The SVG and the 96px PNG sat in `public/` being served correctly and used
+   * by nothing: a browser does not go looking for them without a link tag. The
+   * SVG is listed first as the one modern browsers should prefer — it scales to
+   * every size and to dark mode — with the ICO as the fallback for those that
+   * cannot read it.
+   *
+   * These replaced the App Router's `app/favicon.ico` convention, which was
+   * generating the link from a *different, older* file of the same name and
+   * advertising a stale `sizes="256x256"` with it.
+   */
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-96x96.png", type: "image/png", sizes: "96x96" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 /**
