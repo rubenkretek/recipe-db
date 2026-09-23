@@ -35,6 +35,24 @@ const ACCEPTED = ".md,.markdown,.txt,text/markdown,text/plain";
 type Choice = { mode: "existing" | "create"; name: string };
 
 /**
+ * Capitalises the first letter, leaving the rest of the name alone.
+ *
+ * Sentence case, not title case: the kitchen's own names read "Green beans"
+ * and "Coconut milk", so "Green Beans" would be the odd one out. The model
+ * returns everything lowercase, and a list mixing "Olive oil" with "red
+ * lentils" looks like a mistake even when nothing is wrong.
+ *
+ * Applied to the *value* rather than with `autoCapitalize`, which would only
+ * hint to a phone keyboard and leave the saved name untouched — and which is
+ * the same family of attribute as `autoComplete` and `enterKeyHint`, both of
+ * which cause a hydration mismatch on this stack. See CLAUDE.md.
+ */
+function capitaliseFirst(name: string): string {
+  const text = name.trimStart();
+  return text === "" ? text : text[0].toUpperCase() + text.slice(1);
+}
+
+/**
  * The progress bar is an **estimate**, and deliberately so.
  *
  * There is no real progress to report: the import is two calls to the model
@@ -201,7 +219,10 @@ export function RecipeImport({
           continue;
         }
 
-        const name = choice?.name?.trim() || ingredient.name;
+        // The fallback is the model's raw wording, so it needs the same
+        // treatment as the field: a row the user never opened must not create a
+        // lowercase ingredient.
+        const name = capitaliseFirst(choice?.name?.trim() || ingredient.name);
         const result = await findOrCreateIngredient({ name });
 
         if ("error" in result) {
@@ -483,7 +504,10 @@ export function RecipeImport({
                         onClick={() =>
                           setChoices((current) => ({
                             ...current,
-                            [index]: { mode: "create", name: ingredient.name },
+                            [index]: {
+                              mode: "create",
+                              name: capitaliseFirst(ingredient.name),
+                            },
                           }))
                         }
                       >
@@ -499,7 +523,10 @@ export function RecipeImport({
                       onChange={(event) =>
                         setChoices((current) => ({
                           ...current,
-                          [index]: { mode: "create", name: event.target.value },
+                          [index]: {
+                            mode: "create",
+                            name: capitaliseFirst(event.target.value),
+                          },
                         }))
                       }
                     />
@@ -538,7 +565,10 @@ function startingChoices(draft: RecipeDraft): Record<number, Choice> {
       // near-duplicate every import; the other button is right there.
       choices[index] = { mode: "existing", name: ingredient.match.name };
     } else if (ingredient.match.status === "new") {
-      choices[index] = { mode: "create", name: ingredient.name };
+      // Capitalised at the seed too, not only as you type — otherwise the field
+      // sits there lowercase until touched, and an untouched field is the
+      // common case.
+      choices[index] = { mode: "create", name: capitaliseFirst(ingredient.name) };
     }
   });
 
