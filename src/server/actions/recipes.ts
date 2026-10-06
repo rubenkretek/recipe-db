@@ -78,25 +78,14 @@ async function replaceRecipeIngredients(
   kitchenId: string,
   ingredients: RecipeIngredientValues[],
 ): Promise<string | null> {
-  const supabase = await createClient();
-
-  const { error: clearError } = await supabase
-    .from("recipe_ingredients")
-    .delete()
-    .eq("recipe_id", recipeId)
-    .eq("kitchen_id", kitchenId);
-
-  if (clearError) {
-    return clearError.message;
-  }
-
-  if (ingredients.length === 0) {
-    return null;
-  }
-
-  // A plain loop rather than `map`, so a throw can name the line it came from.
-  // toBase refuses to guess at a missing or unknown unit, and the zod schema
-  // should have caught it first — this is the belt to that pair of braces, and
+  // Everything is converted BEFORE a single row is touched. `toBase` refuses to
+  // guess at a missing or unknown unit, and this used to run *after* the delete
+  // below — so a save that failed on one bad unit emptied the recipe's
+  // ingredient list instead of leaving it alone. It was only ever recoverable
+  // because the form still held the data; closing the tab on that error would
+  // have lost it.
+  //
+  // A plain loop rather than `map`, so a throw can name the line it came from:
   // "Unknown unit: null" with no row number was no use to anyone.
   const rows = [];
   for (const [index, ingredient] of ingredients.entries()) {
@@ -123,6 +112,24 @@ async function replaceRecipeIngredients(
         error instanceof Error ? error.message : "its unit is not one we store.";
       return `Ingredient ${index + 1} could not be saved: ${detail}`;
     }
+  }
+
+  const supabase = await createClient();
+
+  const { error: clearError } = await supabase
+    .from("recipe_ingredients")
+    .delete()
+    .eq("recipe_id", recipeId)
+    .eq("kitchen_id", kitchenId);
+
+  if (clearError) {
+    return clearError.message;
+  }
+
+  // An empty list is a real edit — removing every ingredient — so the delete
+  // above still has to happen before this returns.
+  if (rows.length === 0) {
+    return null;
   }
 
   const { error: insertError } = await supabase
@@ -257,6 +264,39 @@ function describeIssues(issues: { path: PropertyKey[]; message: string }[]): str
     : described.join(" ");
 }
 
+/**
+ * Removes a recipe that was created and then failed to finish saving.
+ *
+ * `createRecipe` has to insert the recipe row first, because its id is what the
+ * tags, ingredients and steps are attached to. Returning an error after that
+ * insert without undoing it leaves a recipe with a name and nothing else — and
+ * the author, who just saw an error, presses Save again. That is how one recipe
+ * became ten with nine empty: the quantity-without-unit bug failed every
+ * attempt at the ingredients step, and each attempt left its row behind.
+ *
+ * The thorough fix is to do the whole create in one transaction, which here
+ * means a `security definer` RPC like `complete_meal_plan`. This is the
+ * compensating action instead: no migration, and it closes the hole. If the
+ * cleanup itself fails an orphan still survives, which is no worse than before.
+ *
+ * Safe to hard-delete: the row is seconds old, its children cascade, and a
+ * brand-new recipe cannot own storage objects — `replaceRecipeSteps` rejects
+ * any photo path, since the folder is named after an id that did not exist when
+ * the client built the form.
+ */
+async function discardPartialRecipe(
+  recipeId: string,
+  kitchenId: string,
+): Promise<void> {
+  const supabase = await createClient();
+
+  await supabase
+    .from("recipes")
+    .delete()
+    .eq("id", recipeId)
+    .eq("kitchen_id", kitchenId);
+}
+
 /** Creates a recipe and goes straight to it. Only the name is required. */
 export async function createRecipe(
   input: unknown,
@@ -288,12 +328,15 @@ export async function createRecipe(
     return { error: error?.message ?? "Could not create the recipe." };
   }
 
+  // Every failure from here on has to undo the insert above, or it leaves an
+  // empty recipe behind and the next attempt leaves another.
   const tagError = await replaceRecipeTags(
     data.id,
     active.id,
     parsed.data.tagIds,
   );
   if (tagError) {
+    await discardPartialRecipe(data.id, active.id);
     return { error: tagError };
   }
 
@@ -303,6 +346,7 @@ export async function createRecipe(
     parsed.data.ingredients,
   );
   if (ingredientError) {
+    await discardPartialRecipe(data.id, active.id);
     return { error: ingredientError };
   }
 
@@ -314,6 +358,7 @@ export async function createRecipe(
     parsed.data.steps,
   );
   if (stepError) {
+    await discardPartialRecipe(data.id, active.id);
     return { error: stepError };
   }
 
