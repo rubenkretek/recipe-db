@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AddToPlanButton } from "@/components/recipes/add-to-plan-button";
 import { ArchiveButton } from "@/components/recipes/archive-button";
 import { IngredientList } from "@/components/recipes/ingredient-list";
-import { StepList } from "@/components/recipes/step-list";
+import { StepMethod } from "@/components/recipes/step-method";
 import { PhotoGallery } from "@/components/recipes/photo-gallery";
 import {
   RatingControl,
@@ -132,9 +132,9 @@ export default async function RecipePage({
       {recipe.steps.length > 0 && (
         <>
           <Separator />
+          {/* The heading moved inside, so the view switch can sit beside it. */}
           <section className="flex flex-col gap-4">
-            <h2 className="text-sm font-medium">Method</h2>
-            <StepList steps={recipe.steps} />
+            <StepMethod steps={recipe.steps} />
           </section>
         </>
       )}

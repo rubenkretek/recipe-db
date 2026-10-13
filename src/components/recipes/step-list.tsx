@@ -1,14 +1,32 @@
-import { Markdown } from "@/components/recipes/markdown";
+"use client";
+
+import {
+  StepDescription,
+  StepTitle,
+  type WordField,
+} from "@/components/recipes/step-text";
 import type { RecipeStep } from "@/lib/recipes";
+import type { HighlightedWord } from "@/lib/word-spans";
 
 /**
- * The method on the recipe page: numbered steps, in order.
+ * The method as numbered steps, in order. The default view.
  *
- * A Server Component — nothing here is interactive. Numbers come from position,
- * not from a stored field, so reordering in the editor can never leave a gap or
- * a duplicate "Step 3".
+ * Numbers come from position, not from a stored field, so reordering in the
+ * editor can never leave a gap or a duplicate "Step 3".
+ *
+ * A Client Component since tap-to-highlight arrived — it was a Server
+ * Component, and the words have to be tappable. It holds no state of its own:
+ * the highlight lives in `StepMethod`, so switching views keeps it.
  */
-export function StepList({ steps }: { steps: RecipeStep[] }) {
+export function StepList({
+  steps,
+  highlight,
+  onTap,
+}: {
+  steps: RecipeStep[];
+  highlight: HighlightedWord;
+  onTap: (stepId: string, field: WordField, index: number) => void;
+}) {
   return (
     <ol className="flex flex-col gap-6">
       {steps.map((step, index) => (
@@ -23,7 +41,12 @@ export function StepList({ steps }: { steps: RecipeStep[] }) {
           <div className="flex min-w-0 flex-1 flex-col gap-3">
             <h3 className="pt-0.5 font-medium">
               <span className="sr-only">Step {index + 1}: </span>
-              {step.title}
+              <StepTitle
+                stepId={step.id}
+                text={step.title}
+                highlight={highlight}
+                onTap={onTap}
+              />
             </h3>
 
             {step.photoUrl && (
@@ -37,7 +60,14 @@ export function StepList({ steps }: { steps: RecipeStep[] }) {
               />
             )}
 
-            {step.description && <Markdown>{step.description}</Markdown>}
+            {step.description && (
+              <StepDescription
+                stepId={step.id}
+                text={step.description}
+                highlight={highlight}
+                onTap={onTap}
+              />
+            )}
           </div>
         </li>
       ))}

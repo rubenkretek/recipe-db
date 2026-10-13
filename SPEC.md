@@ -804,6 +804,16 @@ something is added — so steps 2 and 5 are conditional.
 - Once some ingredients have been added, the button becomes secondary and gains a subtitle: "6 of 8 added".
 - A **Add ingredients for all recipes** action at the top opens the same picker with every not-yet-added ingredient across the whole plan, grouped under recipe headings, all ticked by default.
 
+### Method views
+
+Added 2026-10-13.
+
+- The method has **two views, switched beside the "Method" heading**: the numbered list (the default) and a **card view**, one step per card.
+- The list is the default on every visit rather than remembered — it is the one that reads as a recipe, and a half-remembered carousel is not what you want when you open a recipe to read it. Worth persisting if the cards turn out to be what gets used.
+- The card view is for cooking from: one step at a time, oversized Back and Next buttons for a wet thumb, narrow tap zones at the screen edges, and swipe. Swiping is a CSS scroll-snap container, so the momentum and snapping are the browser's own rather than an imitation.
+- **Tapping a word highlights it, in both views.** One word at a time anywhere in the method; tapping another moves the marker, tapping the same word again clears it. It marks where you are mid-step and is deliberately not stored — it lives in the client and dies with the page.
+- The edge tap zones sit in the card's gutter so they never cover text: tapping a word must mark it, not navigate.
+
 ### Shopping screen detail
 
 - Top-level control is a horizontal row of supermarket chips plus an "All" chip. Selecting one filters to items assigned to that supermarket. Each chip carries its shop's colour (§5.5): full strength when selected, a light wash of the same hue when not. The label colour is computed from the shop's luminance, because the household picks these hex codes by hand and dark text on a dark chip is unreadable.

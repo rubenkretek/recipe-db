@@ -1,6 +1,8 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { rehypeWordSpans } from "@/lib/word-spans";
+
 /**
  * Renders a recipe method written in markdown.
  *
@@ -11,11 +13,36 @@ import remarkGfm from "remark-gfm";
  *
  * GFM is on for tables and task lists, which recipe methods do use.
  */
-export function Markdown({ children }: { children: string }) {
+export function Markdown({
+  children,
+  tappableWords = false,
+  highlightedWord = null,
+}: {
+  children: string;
+  /**
+   * Wraps every word in its own element so one can be tapped and marked.
+   *
+   * Off by default, so every other place markdown is rendered — recipe notes,
+   * anywhere later — produces exactly the markup it did before.
+   */
+  tappableWords?: boolean;
+  /** Which word index to mark, or null for none. Ignored unless tappable. */
+  highlightedWord?: number | null;
+}) {
   return (
     <div className="flex flex-col gap-3 text-sm leading-relaxed">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        // Typed from the component's own props rather than importing unified's
+        // `PluggableList`, which is a transitive dependency and not ours to
+        // import directly.
+        rehypePlugins={
+          tappableWords
+            ? ([
+                [rehypeWordSpans, { highlighted: highlightedWord }],
+              ] as React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"])
+            : undefined
+        }
         components={{
           // Demoted one level: the page already owns the h1, so a method's
           // "# " must not compete with the recipe title for outline order.
