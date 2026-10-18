@@ -52,8 +52,7 @@ export default async function RecipePage({
       )}
 
       <div className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-semibold">{recipe.name}</h1>
+        <div className="flex flex-col justify-between gap-4">
           <div className="flex shrink-0 flex-wrap gap-2">
             {/* Archived recipes cannot be planned, so the button is not shown
                 rather than shown and refused. */}
@@ -76,6 +75,7 @@ export default async function RecipePage({
               isArchived={Boolean(recipe.archivedAt)}
             />
           </div>
+          <h1 className="text-2xl font-semibold">{recipe.name}</h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
