@@ -256,7 +256,8 @@ function PlannedRecipeRow({
       className={cn(
         // Its own card, separated by a gap, rather than a band in one long
         // bordered list: each row is a recipe with its own actions.
-        "bg-background bg-gray-900 flex flex-col gap-2 rounded-lg border p-3",
+        // `overflow-hidden` so the flush photo takes the card's rounded corner.
+        "bg-background bg-gray-900 flex flex-col overflow-hidden rounded-lg border",
         // A cooked recipe recedes: it is done, and what is left to cook should
         // be what catches the eye.
         isCooked && "bg-muted/40",
@@ -266,30 +267,18 @@ function PlannedRecipeRow({
       )}
     >
       {/*
-        Wraps on a phone: the name takes the whole first line and the controls
-        drop to a second one. `basis-full` is what forces that — with only
-        `min-w-0` the name would shrink to a sliver beside the controls instead
-        of wrapping, which left it a few characters wide at 360px. From `sm`
-        upwards everything fits on one line again.
+        The top of the card is one big link to the recipe: photo, name and
+        badges together. The photo and the name used to be two small separate
+        links, which were fiddly to hit with a thumb.
       */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-0 sm:flex-1">
-          {!readOnly && isReordering && (
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
-              aria-label={`Reorder ${planned.name}`}
-              {...attributes}
-              {...listeners}
-            >
-              <GripVertical className="size-4" />
-            </button>
-          )}
-
-          <Link
-            href={`/recipes/${planned.recipeId}`}
-            className="bg-muted text-muted-foreground/40 flex size-12 shrink-0 items-center justify-center overflow-hidden rounded"
-          >
+      <div className="flex items-stretch">
+        <Link
+          href={`/recipes/${planned.recipeId}`}
+          className="group hover:bg-muted/50 flex min-w-0 flex-1 items-stretch transition-colors"
+        >
+          {/* Flush with the card's edge, no padding. `min-h` keeps it square-ish
+              when the name is a single line. */}
+          <div className="bg-muted text-muted-foreground/40 flex min-h-20 w-20 shrink-0 items-center justify-center overflow-hidden">
             {planned.coverUrl ? (
               <img
                 src={planned.coverUrl}
@@ -300,22 +289,21 @@ function PlannedRecipeRow({
             ) : (
               <ImageIcon className="size-5" />
             )}
-          </Link>
+          </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            {/* Wraps rather than truncates: with a line to itself there is room
-                for it, and a cut-off recipe name is unreadable. `wrap-break-word`
-                keeps a long unbroken word inside the row. */}
-            <Link
-              href={`/recipes/${planned.recipeId}`}
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 p-3">
+            {/* Wraps rather than truncates: a cut-off recipe name is
+                unreadable. `wrap-break-word` keeps a long unbroken word inside
+                the card. */}
+            <span
               className={
                 isCooked
                   ? "text-muted-foreground text-sm font-medium wrap-break-word line-through"
-                  : "text-sm font-medium wrap-break-word hover:underline"
+                  : "text-sm font-medium wrap-break-word group-hover:underline"
               }
             >
               {planned.name}
-            </Link>
+            </span>
             <div className="flex flex-wrap items-center gap-1.5">
               <Badge variant="outline" className="capitalize">
                 {planned.mealType}
@@ -325,10 +313,26 @@ function PlannedRecipeRow({
               {planned.archivedAt && <Badge variant="outline">Archived</Badge>}
             </div>
           </div>
-        </div>
+        </Link>
 
-        {/* Right-aligned on the phone's second line, inline on wider screens. */}
-        <div className="flex shrink-0 justify-between w-full items-between gap-3">
+        {/* On the right, outside the link, so the photo stays flush and a drag
+            never doubles as a tap through to the recipe. */}
+        {!readOnly && isReordering && (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground flex shrink-0 cursor-grab touch-none items-center px-3 active:cursor-grabbing"
+            aria-label={`Reorder ${planned.name}`}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Everything you can change, below a subtle divider. */}
+      <div className="flex flex-col gap-2 border-t p-3">
+        <div className="flex w-full items-center justify-between gap-3">
           {readOnly ? (
             <span className="text-muted-foreground text-sm tabular-nums">
               {planned.servings}{" "}
@@ -361,78 +365,79 @@ function PlannedRecipeRow({
             </Button>
           )}
         </div>
-      </div>
 
-      {/* The row's two actions, half the card each. Full width beats squeezing
-          them beside the thumbnail: both are tapped with a thumb.
-          SPEC.md §7 plan-screen detail. */}
-      {!readOnly && (
-        <div className="grid grid-cols-2 gap-2">
-          {planned.ingredients.length > 0 && (
-            <IngredientPicker
-              recipes={[planned]}
-              mode="recipe"
-              trigger={
-                <Button
-                  type="button"
-                  // `outline` rather than `ghost` once something has been
-                  // added: a ghost button has no border or fill and reads as
-                  // plain text sitting next to a real button.
-                  variant={planned.addedCount > 0 ? "outline" : "secondary"}
-                  size="sm"
-                  className="h-auto w-full flex-col gap-0.5 py-2"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <ShoppingCart className="size-4" />
-                    Add ingredients
-                  </span>
-                  {/* Quieter than the label: a progress note, not the action. */}
-                  {planned.addedCount > 0 && (
-                    <span className="text-muted-foreground text-[10px] font-normal">
-                      {planned.addedCount} of {planned.ingredients.length} added
+        {/* The row's two actions, half the card each. Full width beats
+            squeezing them beside the thumbnail: both are tapped with a thumb.
+            SPEC.md §7 plan-screen detail. */}
+        {!readOnly && (
+          <div className="grid grid-cols-2 gap-2">
+            {planned.ingredients.length > 0 && (
+              <IngredientPicker
+                recipes={[planned]}
+                mode="recipe"
+                trigger={
+                  <Button
+                    type="button"
+                    // `outline` rather than `ghost` once something has been
+                    // added: a ghost button has no border or fill and reads as
+                    // plain text sitting next to a real button.
+                    variant={planned.addedCount > 0 ? "outline" : "secondary"}
+                    size="sm"
+                    className="h-auto w-full flex-col gap-0.5 py-2"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <ShoppingCart className="size-4" />
+                      Add ingredients
                     </span>
-                  )}
-                </Button>
-              }
-            />
-          )}
-
-          <Button
-            type="button"
-            variant={isCooked ? "secondary" : "outline"}
-            size="sm"
-            // A toggle, so it reports its state rather than just its label.
-            aria-pressed={isCooked}
-            className={cn(
-              "h-auto w-full flex-col gap-0.5 py-2",
-              // Nothing to add from a recipe with no ingredients, so this takes
-              // the whole width rather than leaving a gap.
-              planned.ingredients.length === 0 && "col-span-2",
+                    {/* Quieter than the label: a progress note, not the action. */}
+                    {planned.addedCount > 0 && (
+                      <span className="text-muted-foreground text-[10px] font-normal">
+                        {planned.addedCount} of {planned.ingredients.length}{" "}
+                        added
+                      </span>
+                    )}
+                  </Button>
+                }
+              />
             )}
-            disabled={isPending}
-            onClick={() => {
-              // Not optimistic: the card restyles heavily when this flips, and
-              // a revert would be more jarring than the wait.
-              void setCooked({
-                plannedRecipeId: planned.id,
-                cooked: !isCooked,
-              }).then((result) => {
-                if (result?.error) toast.error(result.error);
-                router.refresh();
-              });
-            }}
-          >
-            <span className="flex items-center gap-1.5">
-              {isCooked ? (
-                <Check className="size-4" />
-              ) : (
-                <CookingPot className="size-4" />
+
+            <Button
+              type="button"
+              variant={isCooked ? "secondary" : "outline"}
+              size="sm"
+              // A toggle, so it reports its state rather than just its label.
+              aria-pressed={isCooked}
+              className={cn(
+                "h-auto w-full flex-col gap-0.5 py-2",
+                // Nothing to add from a recipe with no ingredients, so this takes
+                // the whole width rather than leaving a gap.
+                planned.ingredients.length === 0 && "col-span-2",
               )}
-              {isCooked ? "Cooked" : "Mark cooked"}
-            </span>
-          </Button>
-        </div>
-      )}
+              disabled={isPending}
+              onClick={() => {
+                // Not optimistic: the card restyles heavily when this flips, and
+                // a revert would be more jarring than the wait.
+                void setCooked({
+                  plannedRecipeId: planned.id,
+                  cooked: !isCooked,
+                }).then((result) => {
+                  if (result?.error) toast.error(result.error);
+                  router.refresh();
+                });
+              }}
+            >
+              <span className="flex items-center gap-1.5">
+                {isCooked ? (
+                  <Check className="size-4" />
+                ) : (
+                  <CookingPot className="size-4" />
+                )}
+                {isCooked ? "Cooked" : "Mark cooked"}
+              </span>
+            </Button>
+          </div>
+        )}
+      </div>
     </li>
   );
 }

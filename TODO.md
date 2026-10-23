@@ -1,1 +1,0 @@
-[ ] - On the recipe cards make sure the entire area is clickable.
