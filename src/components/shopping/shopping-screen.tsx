@@ -251,10 +251,10 @@ function SupermarketChips({
             style={style}
             className={
               chip.colour
-                ? "shrink-0 rounded-full border px-3.5 py-1.5 text-sm"
+                ? "pressable shrink-0 rounded-full border px-3.5 py-1.5 text-sm"
                 : isSelected
-                  ? "bg-primary text-primary-foreground shrink-0 rounded-full px-3.5 py-1.5 text-sm"
-                  : "shrink-0 rounded-full border px-3.5 py-1.5 text-sm"
+                  ? "bg-primary text-primary-foreground pressable shrink-0 rounded-full px-3.5 py-1.5 text-sm"
+                  : "pressable hover:bg-muted shrink-0 rounded-full border px-3.5 py-1.5 text-sm"
             }
           >
             {chip.label}

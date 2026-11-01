@@ -54,7 +54,10 @@ export function MainNav() {
                 href={href}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex h-full flex-col items-center justify-center gap-1 transition-colors",
+                  // `pressable` already transitions colour, so the old
+                  // `transition-colors` would just be a second, conflicting
+                  // transition-property declaration.
+                  "pressable flex h-full flex-col items-center justify-center gap-1",
                   isActive
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground",

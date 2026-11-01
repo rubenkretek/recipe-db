@@ -4,6 +4,13 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /*
+   * The easing for every interaction. Decelerating hard — it leaves almost
+   * immediately and settles at the end, which is what reads as "snappy".
+   * A symmetrical ease-in-out at the same duration feels slower than it is.
+   */
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
+
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -138,5 +145,70 @@
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+}
+
+/*
+ * Press feedback for anything tappable that is not a `Button`.
+ *
+ * The app felt sluggish, and most of that was not speed: a tap that shows
+ * nothing until the server answers reads as a dropped tap, so the person taps
+ * again. Feedback within ~60ms makes the same round trip feel fine, which is
+ * why this exists on the *element* rather than waiting on any request.
+ *
+ * `Button` carries its own, via the variants in `components/ui/button.tsx`.
+ * Everything hand-rolled — cards, rows, chips, grid cells — gets this class.
+ *
+ * Only `transform` and colours are animated. Both are cheap for the compositor;
+ * animating width, height or margin would cause layout work on every frame and
+ * make the sluggishness real rather than apparent.
+ */
+@utility pressable {
+  transition-property:
+    transform, background-color, border-color, color, box-shadow, opacity;
+  transition-timing-function: var(--ease-snappy);
+  transition-duration: 140ms;
+
+  &:active {
+    /*
+     * Down faster than up. A press has to feel instant; the release can
+     * afford to settle, and the asymmetry is most of what makes it feel
+     * mechanical rather than mushy.
+     */
+    transition-duration: 60ms;
+    transform: scale(0.97);
+  }
+}
+
+/*
+ * Taking `prefers-reduced-motion` seriously.
+ *
+ * Every duration collapses, so **nothing animates**: no transitions, no
+ * keyframes, no smooth scrolling. The state changes still happen, which is what
+ * keeps the feedback — a press still changes colour and still shrinks 3%, it
+ * simply arrives in one frame instead of easing in.
+ *
+ * That instantaneous scale is a deliberate choice, not an oversight. With every
+ * transition collapsed there is no *motion* left for the media query to be
+ * about: it is a static difference that exists while a finger is down, the same
+ * kind of thing as the colour change beside it. Removing it would leave these
+ * users with strictly less feedback than everyone else, which is the opposite
+ * of the point.
+ *
+ * It is also the only thing that survives minification. Resetting the scale
+ * needs `scale: none` alongside `transform: none`, because Tailwind compiles
+ * `scale-[0.97]` to the standalone `scale:` property — and Lightning CSS merges
+ * those declarations into a single `transform: scale(1) translate(0)`, which by
+ * the Transforms spec cannot cancel `scale:` at all. The reset compiled to
+ * something that did nothing; this does what it says.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

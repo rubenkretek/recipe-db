@@ -83,7 +83,11 @@ export function ShoppingItemRow({
         type="button"
         onClick={onToggle}
         aria-pressed={item.isChecked}
-        className="flex min-h-14 flex-1 items-center gap-3 px-3 text-left"
+        // A tint rather than a scale. This is a full-width list row: shrinking
+        // it would wobble the whole list, where a background flash reads as
+        // "got it" — and this row is tapped more than anything else in the app,
+        // with a trolley in the other hand.
+        className="flex min-h-14 flex-1 items-center gap-3 px-3 text-left transition-colors duration-100 ease-snappy hover:bg-muted/50 active:bg-muted"
       >
         {/* Not a real checkbox: the row is the control, and a nested
             interactive element would swallow the tap. */}

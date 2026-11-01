@@ -16,15 +16,20 @@ import type { RecipeListItem } from "@/lib/recipes";
  */
 export function RecipeCard({ recipe }: { recipe: RecipeListItem }) {
   return (
-    <Link href={`/recipes/${recipe.id}`} className="group">
-      <Card className="h-full gap-0 overflow-hidden py-0 transition-colors group-hover:border-foreground/20">
+    // `block` is load-bearing, not tidiness: `transform` does nothing on an
+    // inline element, so the press scale would silently never happen on an
+    // `<a>` left at its default display.
+    <Link href={`/recipes/${recipe.id}`} className="group pressable block">
+      <Card className="h-full gap-0 overflow-hidden py-0 transition-all duration-150 ease-snappy group-hover:border-foreground/20 group-hover:shadow-md">
         <div className="bg-muted text-muted-foreground/40 flex aspect-video items-center justify-center overflow-hidden">
           {recipe.coverUrl ? (
             <img
               src={recipe.coverUrl}
               alt=""
               loading="lazy"
-              className="size-full object-cover"
+              // Drifts in a little under the cursor. Slower than the press,
+              // because this one is decoration rather than feedback.
+              className="size-full object-cover transition-transform duration-300 ease-snappy group-hover:scale-[1.03]"
             />
           ) : (
             <ImageIcon className="size-8" />

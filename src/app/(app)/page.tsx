@@ -44,8 +44,10 @@ export default async function DashboardPage() {
       {/* The three things the app does, in the order the core loop uses them,
           then the library they all draw on. SPEC.md §8. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Link href="/recipes">
-          <Card className="h-full transition-colors hover:border-foreground/20">
+        {/* `block` so the press scale applies: `transform` is ignored on an
+            inline element, which an `<a>` is by default. */}
+        <Link href="/recipes" className="group pressable block">
+          <Card className="h-full transition-all duration-150 ease-snappy group-hover:border-foreground/20 group-hover:shadow-md">
             <CardHeader>
               <BookOpen className="text-muted-foreground size-5" />
               <CardTitle className="text-base">Recipes</CardTitle>
@@ -58,8 +60,8 @@ export default async function DashboardPage() {
           </Card>
         </Link>
 
-        <Link href="/plan">
-          <Card className="h-full transition-colors hover:border-foreground/20">
+        <Link href="/plan" className="group pressable block">
+          <Card className="h-full transition-all duration-150 ease-snappy group-hover:border-foreground/20 group-hover:shadow-md">
             <CardHeader>
               <CalendarDays className="text-muted-foreground size-5" />
               <CardTitle className="text-base">
@@ -83,8 +85,8 @@ export default async function DashboardPage() {
           </Card>
         </Link>
 
-        <Link href="/shopping">
-          <Card className="h-full transition-colors hover:border-foreground/20">
+        <Link href="/shopping" className="group pressable block">
+          <Card className="h-full transition-all duration-150 ease-snappy group-hover:border-foreground/20 group-hover:shadow-md">
             <CardHeader>
               <ShoppingCart className="text-muted-foreground size-5" />
               <CardTitle className="text-base">Shopping list</CardTitle>
@@ -102,8 +104,8 @@ export default async function DashboardPage() {
         {/* The unassigned count rather than a bare total: those are the things
             that arrive on a list under "Unassigned" instead of in an aisle, and
             the grid behind this link is where that is fixed. */}
-        <Link href="/settings/ingredients">
-          <Card className="hover:border-foreground/20 h-full transition-colors">
+        <Link href="/settings/ingredients" className="group pressable block">
+          <Card className="h-full transition-all duration-150 ease-snappy group-hover:border-foreground/20 group-hover:shadow-md">
             <CardHeader>
               <Carrot className="text-muted-foreground size-5" />
               <CardTitle className="text-base">Ingredients</CardTitle>

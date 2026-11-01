@@ -100,8 +100,8 @@ function ViewButton({
       onClick={onClick}
       className={
         isOn
-          ? "bg-muted flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-          : "text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
+          ? "bg-muted pressable flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-muted/50 pressable flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
       }
     >
       {icon}
