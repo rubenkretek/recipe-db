@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
 
@@ -8,12 +9,18 @@ import { createClient } from "@/lib/supabase/server";
  * Uses getClaims() rather than getUser() because the claims are verified from
  * the JWT locally, with no round trip to Supabase on every render. RLS is the
  * actual authorisation boundary; this is only identification.
+ *
+ * Wrapped in React's `cache()`, which memoises **for one request only** — a
+ * different thing from `unstable_cache`, and without any of its hazards: there
+ * is no lifetime to get wrong, nothing is shared between users, and reading
+ * `cookies()` inside is perfectly fine. It exists because a single page render
+ * asks for the current user several times over.
  */
-export async function getCurrentUserId(): Promise<string | null> {
+export const getCurrentUserId = cache(async (): Promise<string | null> => {
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   return data?.claims?.sub ?? null;
-}
+});
 
 /**
  * Returns the signed-in user's id, redirecting to the login page if there is
@@ -37,8 +44,10 @@ export type Profile = {
  *
  * Separate from requireUserId() because the id comes free from the JWT whereas
  * this costs a query, and most callers only need the id.
+ *
+ * Per-request memoised, for the same reason as `getCurrentUserId`.
  */
-export async function requireMyProfile(): Promise<Profile> {
+export const requireMyProfile = cache(async (): Promise<Profile> => {
   const userId = await requireUserId();
   const supabase = await createClient();
 
@@ -53,4 +62,4 @@ export async function requireMyProfile(): Promise<Profile> {
   }
 
   return data;
-}
+});

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { requireUserId } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -36,8 +37,20 @@ export type KitchenContext = {
  * This returns both halves together because the app shell needs the list for
  * the switcher and the active one for everything else, and splitting it would
  * mean running the same query twice per request.
+ *
+ * **Memoised per request** with React's `cache()`, which is the single biggest
+ * saving available here: almost every data helper in `src/lib` resolves the
+ * kitchen before doing its own work, so one render of `/shopping` ran this
+ * `kitchen_members` query three separate times — once for the layout, once for
+ * `getActiveShoppingList()` and once for `listSupermarkets()`. Now it runs once
+ * and the rest read the result.
+ *
+ * Nothing about this is a cross-request cache. The memo lives and dies with the
+ * request, so membership changes take effect on the very next one, and no
+ * kitchen's data can ever reach another user — unlike `unstable_cache`, which
+ * must never be used here. See CLAUDE.md.
  */
-export async function getKitchenContext(): Promise<KitchenContext> {
+export const getKitchenContext = cache(async (): Promise<KitchenContext> => {
   const userId = await requireUserId();
   const supabase = await createClient();
 
@@ -67,7 +80,7 @@ export async function getKitchenContext(): Promise<KitchenContext> {
     active:
       kitchens.find((kitchen) => kitchen.id === requestedId) ?? kitchens[0],
   };
-}
+});
 
 /**
  * Loads the kitchen context, sending the user to the kitchens screen if they do
