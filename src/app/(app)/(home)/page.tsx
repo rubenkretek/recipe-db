@@ -9,6 +9,16 @@ import { getActivePlanSummary } from "@/lib/plans";
 import { getUncheckedItemCount } from "@/lib/shopping";
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * The dashboard.
+ *
+ * It lives in a `(home)` route group for one reason: so its `loading.tsx`
+ * scopes to this screen alone. Sitting at `(app)/loading.tsx` it was the
+ * **first** boundary the router found, and every prefetch — Shopping, Recipes,
+ * Plan — came back carrying the dashboard's skeleton instead of its own.
+ * Measured against the real prefetch payloads, not reasoned about. The
+ * parentheses change no URL; this is still `/`.
+ */
 export default async function DashboardPage() {
   const { active } = await requireKitchenContext();
   const [plan, toBuy, ingredients] = await Promise.all([
