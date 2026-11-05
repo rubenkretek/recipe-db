@@ -545,8 +545,13 @@ export function RecipeImport({
             >
               Discard
             </Button>
-            <Button type="button" onClick={accept} disabled={isPending}>
-              {isPending ? "Adding…" : "Fill the form"}
+            <Button
+              type="button"
+              onClick={accept}
+              pending={isPending}
+              pendingLabel="Adding…"
+            >
+              Fill the form
             </Button>
           </DialogFooter>
         </DialogContent>

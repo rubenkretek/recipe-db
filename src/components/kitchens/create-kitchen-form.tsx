@@ -21,7 +21,9 @@ export function CreateKitchenForm() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<CreateKitchenInput>({ resolver: zodResolver(createKitchenSchema) });
+  } = useForm<CreateKitchenInput>({
+    resolver: zodResolver(createKitchenSchema),
+  });
 
   function onSubmit(values: CreateKitchenInput) {
     setFormError(null);
@@ -45,8 +47,8 @@ export function CreateKitchenForm() {
 
       {formError && <p className="text-destructive text-sm">{formError}</p>}
 
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Creating…" : "Create kitchen"}
+      <Button type="submit" pending={isPending} pendingLabel="Creating…">
+        Create kitchen
       </Button>
     </form>
   );

@@ -97,8 +97,13 @@ export function SignupForm({ next }: { next?: string }) {
 
           {formError && <p className="text-destructive text-sm">{formError}</p>}
 
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? "Creating account…" : "Create account"}
+          <Button
+            type="submit"
+            className="w-full"
+            pending={isPending}
+            pendingLabel="Creating account…"
+          >
+            Create account
           </Button>
 
           <p className="text-muted-foreground text-center text-sm">

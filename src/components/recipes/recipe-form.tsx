@@ -139,7 +139,11 @@ export function RecipeForm({
       // a group starts instead.
       ingredients: withHeadings(recipe?.ingredients ?? []).map((entry) =>
         entry.kind === "heading"
-          ? { ...BLANK_INGREDIENT_ROW, kind: "heading" as const, heading: entry.heading }
+          ? {
+              ...BLANK_INGREDIENT_ROW,
+              kind: "heading" as const,
+              heading: entry.heading,
+            }
           : {
               ...BLANK_INGREDIENT_ROW,
               ingredientId: entry.line.ingredientId,
@@ -289,8 +293,8 @@ export function RecipeForm({
       {formError && <p className="text-destructive text-sm">{formError}</p>}
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={isPending}>
-          {isPending ? "Saving…" : recipe ? "Save changes" : "Create recipe"}
+        <Button type="submit" pending={isPending} pendingLabel="Saving…">
+          {recipe ? "Save changes" : "Create recipe"}
         </Button>
         <Button type="button" variant="ghost" asChild>
           <Link href={recipe ? `/recipes/${recipe.id}` : "/recipes"}>

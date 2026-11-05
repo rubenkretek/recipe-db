@@ -30,7 +30,9 @@ export function CopyPlanButton({
     <Button
       type="button"
       variant="secondary"
-      disabled={isPending || recipeCount === 0}
+      disabled={recipeCount === 0}
+      pending={isPending}
+      pendingLabel="Copying…"
       onClick={() =>
         startTransition(async () => {
           const result = await copyPlanToCurrent({ planId });
@@ -50,7 +52,7 @@ export function CopyPlanButton({
       }
     >
       <Copy className="size-4" />
-      {isPending ? "Copying…" : "Copy to current plan"}
+      Copy to current plan
     </Button>
   );
 }

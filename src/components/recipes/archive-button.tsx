@@ -43,7 +43,8 @@ export function ArchiveButton({
     return (
       <Button
         variant="secondary"
-        disabled={isPending}
+        pending={isPending}
+        pendingLabel="Restoring…"
         onClick={() =>
           startTransition(async () => {
             const result = await restoreRecipe({ recipeId });
@@ -56,7 +57,7 @@ export function ArchiveButton({
           })
         }
       >
-        {isPending ? "Restoring…" : "Restore"}
+        Restore
       </Button>
     );
   }
@@ -70,14 +71,15 @@ export function ArchiveButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Archive {recipeName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            It leaves the grid but is not deleted. You can bring it back any time
-            from the archive.
+            It leaves the grid but is not deleted. You can bring it back any
+            time from the archive.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Keep</AlertDialogCancel>
           <AlertDialogAction
-            disabled={isPending}
+            pending={isPending}
+            pendingLabel="Archiving…"
             onClick={(event) => {
               event.preventDefault();
               startTransition(async () => {
@@ -92,7 +94,7 @@ export function ArchiveButton({
               });
             }}
           >
-            {isPending ? "Archiving…" : "Archive"}
+            Archive
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

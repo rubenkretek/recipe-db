@@ -56,14 +56,15 @@ export function LeaveKitchenButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Leave {kitchenName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            You will lose access to its recipes, plans and shopping list. You can
-            rejoin later with a code.
+            You will lose access to its recipes, plans and shopping list. You
+            can rejoin later with a code.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Stay</AlertDialogCancel>
           <AlertDialogAction
-            disabled={isPending}
+            pending={isPending}
+            pendingLabel="Leaving…"
             onClick={(event) => {
               event.preventDefault();
               startTransition(async () => {
@@ -75,7 +76,7 @@ export function LeaveKitchenButton({
               });
             }}
           >
-            {isPending ? "Leaving…" : "Leave"}
+            Leave
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

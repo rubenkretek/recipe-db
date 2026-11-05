@@ -1,7 +1,8 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "cn"
-import { Slot } from "radix-ui"
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
+import { Loader2Icon } from "lucide-react";
+import { Slot } from "radix-ui";
 
 const buttonVariants = cva(
   // `duration-100 ease-snappy` and the press scale are the interaction
@@ -42,20 +43,62 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
-)
+  },
+);
 
+/**
+ * A button that can show its own in-flight state.
+ *
+ * `pending` adds a spinner and, with `pendingLabel`, swaps the label — which is
+ * the pattern nearly thirty call sites were writing by hand as
+ * `disabled={isPending}` plus `{isPending ? "Saving…" : "Save"}`. Two things
+ * were wrong with that. There was no spinner, so a tap produced a greyed-out
+ * button and no sense that anything was happening; and "Save" → "Saving…"
+ * changes the button's width, nudging whatever sits beside it.
+ *
+ * **Both labels are always in the DOM, stacked in one grid cell.** That is what
+ * fixes the width: the button is as wide as the longer of the two from the
+ * start, so the swap moves nothing. Only the opacity changes.
+ *
+ * `pending` keeps the native `disabled` attribute rather than `aria-disabled`,
+ * because that is what stops a second submit reaching a server action, and
+ * preserving it means no call site changes behaviour. The button therefore
+ * dims to `disabled:opacity-50` while pending; the spinner is the signal that
+ * distinguishes "working" from "unavailable".
+ *
+ * Ignored entirely under `asChild`: `Slot.Root` must receive exactly one child
+ * and the stack would be a second, so a `<Button asChild>` wrapping a `<Link>`
+ * renders exactly as it always did.
+ *
+ * The crossfade is a CSS transition, deliberately — the
+ * `prefers-reduced-motion` block in `globals.css` collapses durations, so this
+ * becomes an instant swap for anyone who asked for that, with no JavaScript
+ * involved. See CLAUDE.md.
+ */
 function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
+  pending,
+  pendingLabel,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
+    asChild?: boolean;
+    /** True while the action behind this button is in flight. */
+    pending?: boolean;
+    /** Label to show instead of `children` while pending, e.g. "Saving…". */
+    pendingLabel?: React.ReactNode;
   }) {
-  const Comp = asChild ? Slot.Root : "button"
+  const Comp = asChild ? Slot.Root : "button";
+
+  // Only opt in when a caller asks for it, so every existing button renders
+  // byte-for-byte what it did before.
+  const showsPendingState =
+    !asChild && (pending !== undefined || pendingLabel !== undefined);
 
   return (
     <Comp
@@ -63,9 +106,66 @@ function Button({
       data-variant={variant}
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
+      disabled={showsPendingState ? disabled || pending : disabled}
+      aria-busy={showsPendingState && pending ? true : undefined}
       {...props}
-    />
-  )
+    >
+      {showsPendingState ? (
+        <ButtonPendingContent pending={pending} pendingLabel={pendingLabel}>
+          {children}
+        </ButtonPendingContent>
+      ) : (
+        children
+      )}
+    </Comp>
+  );
 }
 
-export { Button, buttonVariants }
+/**
+ * The two stacked labels that make up a button's pending state.
+ *
+ * Exported because `AlertDialogAction` needs exactly this markup and cannot get
+ * it from `Button`: it renders `<Button asChild>` around a Radix `Action`, and
+ * `asChild` turns the pending stack off by design. Sharing the one
+ * implementation rather than keeping a second copy there, because two
+ * hand-maintained copies of an opacity crossfade drift — one gets a tweak and
+ * the other does not, and nothing fails loudly when they disagree.
+ *
+ * Both children occupy the same grid cell, so the element is sized by the wider
+ * of the two labels and nothing moves when they swap.
+ */
+function ButtonPendingContent({
+  pending,
+  pendingLabel,
+  children,
+}: {
+  pending?: boolean;
+  pendingLabel?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <span className="grid place-items-center">
+      <span
+        aria-hidden={pending || undefined}
+        className={cn(
+          "col-start-1 row-start-1 inline-flex items-center gap-1.5 transition-opacity duration-100 ease-snappy",
+          pending ? "opacity-0" : "opacity-100",
+        )}
+      >
+        {children}
+      </span>
+      <span
+        aria-hidden={!pending || undefined}
+        className={cn(
+          "col-start-1 row-start-1 inline-flex items-center gap-1.5 transition-opacity duration-100 ease-snappy",
+          pending ? "opacity-100" : "opacity-0",
+        )}
+      >
+        <Loader2Icon className="animate-spin" />
+        {pendingLabel ?? children}
+      </span>
+    </span>
+  );
+}
+
+export { Button, ButtonPendingContent, buttonVariants };

@@ -1,15 +1,15 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { cn } from "cn"
-import { AlertDialog as AlertDialogPrimitive } from "radix-ui"
+import * as React from "react";
+import { cn } from "cn";
+import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 
-import { Button } from "@/components/ui/button"
+import { Button, ButtonPendingContent } from "@/components/ui/button";
 
 function AlertDialog({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
+  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
 }
 
 function AlertDialogTrigger({
@@ -17,7 +17,7 @@ function AlertDialogTrigger({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
   return (
     <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
-  )
+  );
 }
 
 function AlertDialogPortal({
@@ -25,7 +25,7 @@ function AlertDialogPortal({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Portal>) {
   return (
     <AlertDialogPrimitive.Portal data-slot="alert-dialog-portal" {...props} />
-  )
+  );
 }
 
 function AlertDialogOverlay({
@@ -37,11 +37,11 @@ function AlertDialogOverlay({
       data-slot="alert-dialog-overlay"
       className={cn(
         "fixed inset-0 z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AlertDialogContent({
@@ -49,7 +49,7 @@ function AlertDialogContent({
   size = "default",
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
-  size?: "default" | "sm"
+  size?: "default" | "sm";
 }) {
   return (
     <AlertDialogPortal>
@@ -59,12 +59,12 @@ function AlertDialogContent({
         data-size={size}
         className={cn(
           "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className
+          className,
         )}
         {...props}
       />
     </AlertDialogPortal>
-  )
+  );
 }
 
 function AlertDialogHeader({
@@ -76,11 +76,11 @@ function AlertDialogHeader({
       data-slot="alert-dialog-header"
       className={cn(
         "grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center has-data-[slot=alert-dialog-media]:grid-rows-[auto_auto_1fr] has-data-[slot=alert-dialog-media]:gap-x-4 sm:group-data-[size=default]/alert-dialog-content:place-items-start sm:group-data-[size=default]/alert-dialog-content:text-left sm:group-data-[size=default]/alert-dialog-content:has-data-[slot=alert-dialog-media]:grid-rows-[auto_1fr]",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AlertDialogFooter({
@@ -92,11 +92,11 @@ function AlertDialogFooter({
       data-slot="alert-dialog-footer"
       className={cn(
         "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AlertDialogMedia({
@@ -108,11 +108,11 @@ function AlertDialogMedia({
       data-slot="alert-dialog-media"
       className={cn(
         "mb-2 inline-flex size-10 items-center justify-center rounded-md bg-muted sm:group-data-[size=default]/alert-dialog-content:row-span-2 *:[svg:not([class*='size-'])]:size-6",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AlertDialogTitle({
@@ -124,11 +124,11 @@ function AlertDialogTitle({
       data-slot="alert-dialog-title"
       className={cn(
         "font-heading text-base font-medium sm:group-data-[size=default]/alert-dialog-content:group-has-data-[slot=alert-dialog-media]/alert-dialog-content:col-start-2",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function AlertDialogDescription({
@@ -140,29 +140,66 @@ function AlertDialogDescription({
       data-slot="alert-dialog-description"
       className={cn(
         "text-sm text-balance text-muted-foreground md:text-pretty *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
+/**
+ * The confirming button in a destructive dialog.
+ *
+ * `pending` works the same way as it does on `Button`, and matters more here:
+ * these are the app's slowest actions — leaving a kitchen, merging two
+ * ingredients, completing a plan — and the dialog stays open while they run, so
+ * without a spinner a confirmed dialog just sits there looking ignored.
+ *
+ * It cannot delegate to `Button`'s own `pending`, because this renders
+ * `<Button asChild>` and `asChild` switches the pending stack off — Radix's
+ * `Slot` must receive exactly one child. So the stack goes *inside* the Radix
+ * `Action` instead, using the same shared `ButtonPendingContent`.
+ *
+ * `disabled` keeps its existing meaning and is OR-ed with `pending`, so a
+ * confirmed dialog cannot be confirmed twice.
+ */
 function AlertDialogAction({
   className,
   variant = "default",
   size = "default",
+  pending,
+  pendingLabel,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Action> &
-  Pick<React.ComponentProps<typeof Button>, "variant" | "size">) {
+  Pick<React.ComponentProps<typeof Button>, "variant" | "size"> & {
+    /** True while the confirmed action is in flight. */
+    pending?: boolean;
+    /** Label to show instead of `children` while pending, e.g. "Leaving…". */
+    pendingLabel?: React.ReactNode;
+  }) {
+  const showsPendingState = pending !== undefined || pendingLabel !== undefined;
+
   return (
     <Button variant={variant} size={size} asChild>
       <AlertDialogPrimitive.Action
         data-slot="alert-dialog-action"
         className={cn(className)}
+        disabled={showsPendingState ? disabled || pending : disabled}
+        aria-busy={showsPendingState && pending ? true : undefined}
         {...props}
-      />
+      >
+        {showsPendingState ? (
+          <ButtonPendingContent pending={pending} pendingLabel={pendingLabel}>
+            {children}
+          </ButtonPendingContent>
+        ) : (
+          children
+        )}
+      </AlertDialogPrimitive.Action>
     </Button>
-  )
+  );
 }
 
 function AlertDialogCancel({
@@ -180,7 +217,7 @@ function AlertDialogCancel({
         {...props}
       />
     </Button>
-  )
+  );
 }
 
 export {
@@ -196,4 +233,4 @@ export {
   AlertDialogPortal,
   AlertDialogTitle,
   AlertDialogTrigger,
-}
+};

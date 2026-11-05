@@ -42,8 +42,13 @@ export function DisplayNameForm({ currentName }: { currentName: string }) {
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
       <div className="flex gap-2">
         <Input aria-label="Display name" {...register("displayName")} />
-        <Button type="submit" variant="secondary" disabled={isPending}>
-          {isPending ? "Saving…" : "Save"}
+        <Button
+          type="submit"
+          variant="secondary"
+          pending={isPending}
+          pendingLabel="Saving…"
+        >
+          Save
         </Button>
       </div>
       {errors.displayName && (

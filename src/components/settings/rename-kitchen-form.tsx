@@ -49,8 +49,13 @@ export function RenameKitchenForm({
       <input type="hidden" {...register("kitchenId")} />
       <div className="flex gap-2">
         <Input aria-label="Kitchen name" {...register("name")} />
-        <Button type="submit" variant="secondary" disabled={isPending}>
-          {isPending ? "Saving…" : "Save"}
+        <Button
+          type="submit"
+          variant="secondary"
+          pending={isPending}
+          pendingLabel="Saving…"
+        >
+          Save
         </Button>
       </div>
       {errors.name && (

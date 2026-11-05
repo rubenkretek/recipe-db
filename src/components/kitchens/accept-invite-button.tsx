@@ -19,7 +19,8 @@ export function AcceptInviteButton({ code }: { code: string }) {
   return (
     <div className="flex flex-col gap-3">
       <Button
-        disabled={isPending}
+        pending={isPending}
+        pendingLabel="Joining…"
         onClick={() => {
           setFormError(null);
           startTransition(async () => {
@@ -30,7 +31,7 @@ export function AcceptInviteButton({ code }: { code: string }) {
           });
         }}
       >
-        {isPending ? "Joining…" : "Join this kitchen"}
+        Join this kitchen
       </Button>
       {formError && <p className="text-destructive text-sm">{formError}</p>}
     </div>

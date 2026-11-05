@@ -6,8 +6,22 @@ import { useState } from "react";
 import { StepCards } from "@/components/recipes/step-cards";
 import { StepList } from "@/components/recipes/step-list";
 import type { WordField } from "@/components/recipes/step-text";
+import {
+  SegmentedControl,
+  type SegmentedOption,
+} from "@/components/ui/segmented-control";
 import type { RecipeStep } from "@/lib/recipes";
 import type { HighlightedWord } from "@/lib/word-spans";
+
+/**
+ * The two ways to read a method. Declared outside the component so the array
+ * identity is stable — `SegmentedControl` keeps a ref of its buttons and the
+ * options feed its keyboard navigation.
+ */
+const VIEW_OPTIONS: SegmentedOption[] = [
+  { value: "list", label: "List", icon: <List className="size-3.5" /> },
+  { value: "cards", label: "Cards", icon: <LayoutGrid className="size-3.5" /> },
+];
 
 /**
  * The method, in whichever view the cook wants, with the heading beside the
@@ -49,24 +63,12 @@ export function StepMethod({ steps }: { steps: RecipeStep[] }) {
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium">Method</h2>
 
-        <div
-          role="group"
-          aria-label="How to show the method"
-          className="flex gap-0.5 rounded-full border p-0.5"
-        >
-          <ViewButton
-            isOn={view === "list"}
-            onClick={() => setView("list")}
-            icon={<List className="size-3.5" />}
-            label="List"
-          />
-          <ViewButton
-            isOn={view === "cards"}
-            onClick={() => setView("cards")}
-            icon={<LayoutGrid className="size-3.5" />}
-            label="Cards"
-          />
-        </div>
+        <SegmentedControl
+          label="How to show the method"
+          options={VIEW_OPTIONS}
+          value={view}
+          onValueChange={(next) => setView(next as "list" | "cards")}
+        />
       </div>
 
       <p className="text-muted-foreground text-xs">
@@ -79,33 +81,5 @@ export function StepMethod({ steps }: { steps: RecipeStep[] }) {
         <StepCards steps={steps} highlight={highlight} onTap={onTap} />
       )}
     </>
-  );
-}
-
-function ViewButton({
-  isOn,
-  onClick,
-  icon,
-  label,
-}: {
-  isOn: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={isOn}
-      onClick={onClick}
-      className={
-        isOn
-          ? "bg-muted pressable flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-muted/50 pressable flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
-      }
-    >
-      {icon}
-      {label}
-    </button>
   );
 }

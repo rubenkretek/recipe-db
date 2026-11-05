@@ -470,14 +470,16 @@ function MergeDialog({
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            disabled={isPending || !targetId}
+            disabled={!targetId}
+            pending={isPending}
+            pendingLabel="Merging…"
             onClick={(event) => {
               event.preventDefault();
               if (targetId) onConfirm(targetId);
               setTargetId(null);
             }}
           >
-            {isPending ? "Merging…" : "Merge"}
+            Merge
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

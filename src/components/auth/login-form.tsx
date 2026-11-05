@@ -80,8 +80,13 @@ export function LoginForm({ next }: { next?: string }) {
 
           {formError && <p className="text-destructive text-sm">{formError}</p>}
 
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? "Signing in…" : "Sign in"}
+          <Button
+            type="submit"
+            className="w-full"
+            pending={isPending}
+            pendingLabel="Signing in…"
+          >
+            Sign in
           </Button>
 
           <p className="text-muted-foreground text-center text-sm">

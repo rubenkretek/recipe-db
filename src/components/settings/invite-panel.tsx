@@ -85,8 +85,13 @@ export function InvitePanel({
           <p className="text-muted-foreground text-sm">
             No live code. Generate one and send it however you like.
           </p>
-          <Button onClick={regenerate} disabled={isPending} className="self-start">
-            {isPending ? "Generating…" : "Generate a code"}
+          <Button
+            onClick={regenerate}
+            pending={isPending}
+            pendingLabel="Generating…"
+            className="self-start"
+          >
+            Generate a code
           </Button>
         </>
       )}

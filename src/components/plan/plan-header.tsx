@@ -217,7 +217,8 @@ export function CompletePlanButton({
         <AlertDialogFooter>
           <AlertDialogCancel>Keep planning</AlertDialogCancel>
           <AlertDialogAction
-            disabled={isPending}
+            pending={isPending}
+            pendingLabel="Completing…"
             onClick={(event) => {
               event.preventDefault();
               startTransition(async () => {
@@ -237,7 +238,7 @@ export function CompletePlanButton({
               });
             }}
           >
-            {isPending ? "Completing…" : "Complete"}
+            Complete
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -259,7 +260,8 @@ export function StartPlanButton() {
   return (
     <Button
       type="button"
-      disabled={isPending}
+      pending={isPending}
+      pendingLabel="Starting…"
       onClick={() =>
         startTransition(async () => {
           const result = await startPlan();
@@ -271,7 +273,7 @@ export function StartPlanButton() {
         })
       }
     >
-      {isPending ? "Starting…" : "Start a plan"}
+      Start a plan
     </Button>
   );
 }

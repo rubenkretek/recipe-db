@@ -58,8 +58,13 @@ export function JoinKitchenForm({ defaultCode }: { defaultCode?: string }) {
 
       {formError && <p className="text-destructive text-sm">{formError}</p>}
 
-      <Button type="submit" variant="secondary" disabled={isPending}>
-        {isPending ? "Joining…" : "Join kitchen"}
+      <Button
+        type="submit"
+        variant="secondary"
+        pending={isPending}
+        pendingLabel="Joining…"
+      >
+        Join kitchen
       </Button>
     </form>
   );
